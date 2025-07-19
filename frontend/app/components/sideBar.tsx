@@ -1,8 +1,18 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Dimensions, StyleSheet, Modal } from 'react-native';
-import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Dimensions,
+  StyleSheet,
+  Modal,
+  Pressable,
+} from "react-native";
+import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import useLogout from "../(auth)/logout";
 
 type SidebarProps = {
   onClose: () => void;
@@ -11,7 +21,8 @@ type SidebarProps = {
 const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const router = useRouter();
-  const screenHeight = Dimensions.get('window').height;
+  const screenHeight = Dimensions.get("window").height;
+  const logout = useLogout();
 
   const handleLogout = () => {
     // Implement your logout logic here
@@ -21,30 +32,30 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
   };
 
   const menuItems = [
-    { 
-      icon: <Ionicons name="person-outline" size={24} color="#E0E0E0" />, 
-      title: "My Profile", 
-      onPress: () => router.push("/(settings)/EditProfileScreen")
+    {
+      icon: <Ionicons name="person-outline" size={24} color="#E0E0E0" />,
+      title: "My Profile",
+      onPress: () => router.push("/(settings)/EditProfileScreen"),
     },
-    { 
-      icon: <Ionicons name="people-outline" size={24} color="#E0E0E0" />, 
-      title: "Gym Buddies", 
-      onPress: () => router.push("/(settings)/gymbuddyScreen")
+    {
+      icon: <Ionicons name="people-outline" size={24} color="#E0E0E0" />,
+      title: "Gym Buddies",
+      onPress: () => router.push("/(settings)/gymbuddyScreen"),
     },
-    { 
-      icon: <Ionicons name="bookmark-outline" size={24} color="#E0E0E0" />, 
-      title: "My OG Collection", 
-      onPress: () => router.push("/(settings)/savedGym")
+    {
+      icon: <Ionicons name="bookmark-outline" size={24} color="#E0E0E0" />,
+      title: "My OG Collection",
+      onPress: () => router.push("/(settings)/savedGym"),
     },
-    { 
-      icon: <Ionicons name="settings-outline" size={24} color="#E0E0E0" />, 
-      title: "Settings", 
-      onPress: () => router.push("/(settings)/userSettings")
+    {
+      icon: <Ionicons name="settings-outline" size={24} color="#E0E0E0" />,
+      title: "Settings",
+      onPress: () => router.push("/(settings)/userSettings"),
     },
-    { 
-      icon: <Feather name="help-circle" size={24} color="#E0E0E0" />, 
-      title: "Need Help", 
-      onPress: () => router.push("/(settings)/QueryScreen")
+    {
+      icon: <Feather name="help-circle" size={24} color="#E0E0E0" />,
+      title: "Need Help",
+      onPress: () => router.push("/(settings)/QueryScreen"),
     },
   ];
 
@@ -63,11 +74,14 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
         <View style={styles.divider} />
 
         {/* Menu Items */}
-        <ScrollView style={styles.menuContainer} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.menuContainer}
+          showsVerticalScrollIndicator={false}
+        >
           {menuItems.map((item, index) => (
-            <TouchableOpacity 
-              key={index} 
-              style={styles.menuItem} 
+            <TouchableOpacity
+              key={index}
+              style={styles.menuItem}
               onPress={item.onPress}
             >
               <View style={styles.menuItemContent}>
@@ -78,8 +92,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
           ))}
 
           {/* Logout Button */}
-          <TouchableOpacity 
-            style={[styles.menuItem, styles.logoutButton]} 
+          <TouchableOpacity
+            style={[styles.menuItem, styles.logoutButton]}
             onPress={() => setLogoutModalVisible(true)}
           >
             <View style={styles.menuItemContent}>
@@ -104,22 +118,27 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Logout Confirmation</Text>
-              <Text style={styles.modalMessage}>Are you sure you want to log out?</Text>
-              
+              <Text style={styles.modalMessage}>
+                Are you sure you want to log out?
+              </Text>
+
               <View style={styles.modalButtons}>
-                <TouchableOpacity 
-                  style={[styles.modalButton, styles.cancelButton]} 
+                <Pressable
+                  className="bg-gray-200 px-4 py-2 rounded-md"
                   onPress={() => setLogoutModalVisible(false)}
                 >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity 
-                  style={[styles.modalButton, styles.logoutConfirmButton]} 
-                  onPress={handleLogout}
+                  <Text>Cancel</Text>
+                </Pressable>
+
+                <Pressable
+                  className="bg-red-500 px-4 py-2 rounded-md"
+                  onPress={() => {
+                    setLogoutModalVisible(false);
+                    logout();
+                  }}
                 >
-                  <Text style={styles.logoutConfirmText}>Log Out</Text>
-                </TouchableOpacity>
+                  <Text className="text-white">Log Out</Text>
+                </Pressable>
               </View>
             </View>
           </View>
@@ -131,13 +150,13 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#1C1C1E',
-    position: 'absolute',
+    backgroundColor: "#1C1C1E",
+    position: "absolute",
     top: 0,
     left: 0,
     zIndex: 1000,
-    width: '80%',
-    shadowColor: '#000',
+    width: "80%",
+    shadowColor: "#000",
     shadowOffset: { width: 2, height: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 5,
@@ -149,15 +168,15 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 15,
   },
   logo: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#E0E0E0',
+    fontWeight: "bold",
+    color: "#E0E0E0",
     letterSpacing: 1.5,
   },
   closeButton: {
@@ -165,7 +184,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#333333',
+    backgroundColor: "#333333",
     marginVertical: 10,
   },
   menuContainer: {
@@ -178,14 +197,14 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   menuItemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   menuItemText: {
     marginLeft: 20,
     fontSize: 16,
-    color: '#E0E0E0',
-    fontWeight: '500',
+    color: "#E0E0E0",
+    fontWeight: "500",
   },
   logoutButton: {
     marginTop: 20,
@@ -193,74 +212,73 @@ const styles = StyleSheet.create({
   logoutText: {
     marginLeft: 20,
     fontSize: 16,
-    color: '#FF3B30',
-    fontWeight: '500',
+    color: "#FF3B30",
+    fontWeight: "500",
   },
   footer: {
     marginTop: 20,
     paddingVertical: 20,
     borderTopWidth: 1,
-    borderTopColor: '#333333',
-    alignItems: 'center',
+    borderTopColor: "#333333",
+    alignItems: "center",
   },
   footerText: {
-    color: '#8E8E93',
+    color: "#8E8E93",
     fontSize: 12,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalContent: {
-    backgroundColor: '#2C2C2E',
+    backgroundColor: "#2C2C2E",
     borderRadius: 12,
     padding: 24,
-    width: '80%',
-    alignItems: 'center',
+    width: "80%",
+    alignItems: "center",
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#E0E0E0',
+    fontWeight: "bold",
+    color: "#E0E0E0",
     marginBottom: 12,
   },
   modalMessage: {
     fontSize: 16,
-    color: '#AAAAAA',
-    textAlign: 'center',
+    color: "#AAAAAA",
+    textAlign: "center",
     marginBottom: 24,
   },
   modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
   },
   modalButton: {
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     flex: 1,
     marginHorizontal: 5,
   },
   cancelButton: {
-    backgroundColor: '#3A3A3C',
+    backgroundColor: "#3A3A3C",
   },
   cancelButtonText: {
-    color: '#E0E0E0',
-    fontWeight: '500',
+    color: "#E0E0E0",
+    fontWeight: "500",
   },
   logoutConfirmButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: "#FF3B30",
   },
   logoutConfirmText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: "#FFFFFF",
+    fontWeight: "600",
   },
 });
 
 export default Sidebar;
-
