@@ -3,12 +3,16 @@ import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, SafeAreaView, StatusBar } from "react-native";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { Ionicons } from "@expo/vector-icons";
+import { useOnboarding } from "@/context/OnboardingContext";
 
 const DOBScreen = () => {
   const router = useRouter();
   const [date, setDate] = useState<Date | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [ageError, setAgeError] = useState<string | null>(null);
+  // const { updateOnboardingData } = useOnboarding();
+  const { onboardingData, updateOnboardingData } = useOnboarding();
+
 
   const isEighteenOrOlder = (dob: Date | null): boolean => {
     if (!dob) return false;
@@ -41,13 +45,16 @@ const DOBScreen = () => {
         .padStart(2, "0")}/${date.getFullYear()}`
     : "";
 
-  const handleNext = () => {
-    if (date && isEighteenOrOlder(date)) {
-      router.push("/gender");
-    } else {
-      setAgeError("We're sorry, you must be at least 18 years old to use this app.");
-    }
-  };
+ const handleNext = () => {
+  if (date && isEighteenOrOlder(date)) {
+    updateOnboardingData({ dateOfBirth: date.toISOString() });
+    console.log("Current Onboarding Data:", onboardingData);
+    router.push("/gender");
+  } else {
+    setAgeError("We're sorry, you must be at least 18 years old to use this app.");
+  }
+};
+
 
   const handleBack = () => {
     router.back();

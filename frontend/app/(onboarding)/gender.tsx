@@ -2,15 +2,20 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useOnboarding } from "@/context/OnboardingContext";
 
 const GENDERS = ['Male', 'Female', 'Non-binary', 'Prefer not to say'];
 
 const GenderScreen = () => {
   const router = useRouter();
   const [selectedGender, setSelectedGender] = useState<string | null>(null);
+  const { onboardingData, updateOnboardingData } = useOnboarding();
+  
 
   const handleNext = () => {
     if (selectedGender) {
+      updateOnboardingData({ gender: selectedGender.toLowerCase() });
+      console.log("Current Onboarding Data:", onboardingData);
       router.push('/gym_level');
     } else {
       alert('Please select your gender.');

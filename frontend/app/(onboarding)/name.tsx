@@ -1,5 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
+import { useOnboarding } from "@/context/OnboardingContext";
+
 import {
   View,
   Text,
@@ -19,16 +21,18 @@ const NameScreen = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [focusedField, setFocusedField] = useState(null);
+  const { updateOnboardingData } = useOnboarding();
 
   const isValid = firstName.trim().length > 0 && lastName.trim().length > 0;
 
-  const handleNext = () => {
-    if (isValid) {
-      router.push('/dob');
-    } else {
-      alert('Please enter both your first and last name.');
-    }
-  };
+ const handleNext = () => {
+  if (isValid) {
+    updateOnboardingData({ firstName, lastName });
+    router.push('/dob');
+  } else {
+    alert('Please enter both your first and last name.');
+  }
+};
 
   const handleBack = () => {
     router.back();

@@ -16,14 +16,11 @@ import { Link } from "expo-router";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const router = useRouter();
-
-  
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -32,25 +29,33 @@ const Login = () => {
     }
 
     try {
-      const response = await fetch("http://172.20.10.4:3000/api/v1/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          password,
-        }),
-      });
+      const response = await fetch(
+        "http://172.20.10.4:3000/api/v1/auth/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: email.trim().toLowerCase(),
+            password,
+          }),
+        }
+      );
 
       const result = await response.json();
-      
+
       console.log(result);
 
       if (result.success) {
         await AsyncStorage.setItem("authToken", result.data.token);
-        Alert.alert("Success", "Logged in successfully");
-        router.push("/");
+        const onboarded = result.data.user?.onboarded;
+
+        if (onboarded) {
+          router.push("/(tabs)/(home)/HomeScreen");
+        } else {
+          router.push("/(onboarding)/house_rules"); 
+        }
       } else {
         Alert.alert("Login Failed", result.message || "Invalid credentials");
       }
@@ -80,7 +85,7 @@ const Login = () => {
 
         {/* Email */}
         <Text className="text-gray-400 mb-1">EMAIL</Text>
-       <View className="flex-row items-center border-b border-gray-700 mb-4 pb-2">
+        <View className="flex-row items-center border-b border-gray-700 mb-4 pb-2">
           <Feather name="mail" size={18} color="#9CA3AF" />
           <TextInput
             placeholder="Enter your email"
@@ -96,7 +101,7 @@ const Login = () => {
         {/* Password */}
         <Text className="text-gray-400 mb-1">PASSWORD</Text>
 
-       <View className="flex-row items-center border-b border-gray-700 mb-2 pb-2">
+        <View className="flex-row items-center border-b border-gray-700 mb-2 pb-2">
           <Feather name="lock" size={18} color="#9CA3AF" />
           <TextInput
             placeholder="Enter your password"

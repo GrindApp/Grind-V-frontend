@@ -4,30 +4,44 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
+import { useOnboarding } from '@/context/OnboardingContext';
 
 const LocationScreen = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const { onboardingData, updateOnboardingData } = useOnboarding();
 
   const requestLocation = async () => {
-    setLoading(true);
-    const { status } = await Location.requestForegroundPermissionsAsync();
+  setLoading(true);
+  const { status } = await Location.requestForegroundPermissionsAsync();
 
-    if (status !== 'granted') {
-      setLoading(false);
-      Alert.alert('Permission Denied', 'Location permission is required to continue.');
-      return;
-    }
+  if (status !== 'granted') {
+    setLoading(false);
+    Alert.alert('Permission Denied', 'Location permission is required to continue.');
+    return;
+  }
 
-    try {
-      await Location.getCurrentPositionAsync({});
-      setLoading(false);
-      router.push('/final-welcome');
-    } catch (err) {
-      setLoading(false);
-      Alert.alert('Error', 'Unable to fetch your location.');
-    }
-  };
+  try {
+    const location = await Location.getCurrentPositionAsync({});
+    const { latitude, longitude } = location.coords;
+
+    // ✅ Save to onboarding context
+    updateOnboardingData({
+      location: {
+        lat: latitude,
+        lng: longitude,
+      },
+    });
+    console.log("Current context data", onboardingData);
+
+    setLoading(false);
+    router.push('/final-welcome');
+  } catch (err) {
+    setLoading(false);
+    Alert.alert('Error', 'Unable to fetch your location.');
+  }
+};
+
 
   const handleSkipForNow = () => {
     Alert.alert(

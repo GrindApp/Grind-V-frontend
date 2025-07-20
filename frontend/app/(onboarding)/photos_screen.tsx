@@ -3,12 +3,15 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Image, ScrollView, Alert, SafeAreaView, StatusBar } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
+import { useOnboarding } from '@/context/OnboardingContext';
+
 
 const MAX_PHOTOS = 6;
 
 const PhotosScreen = () => {
   const router = useRouter();
   const [photos, setPhotos] = useState<(string | null)[]>(Array(MAX_PHOTOS).fill(null));
+  const { onboardingData, updateOnboardingData } = useOnboarding();
 
   const pickImage = async (index: number) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -36,14 +39,16 @@ const PhotosScreen = () => {
     setPhotos(updatedPhotos);
   };
 
-  const handleNext = () => {
-    const hasAtLeastOne = photos.some((p) => p !== null);
-    if (hasAtLeastOne) {
-      router.push('/location');
-    } else {
-      Alert.alert('Upload Required', 'Please upload at least one photo.');
-    }
-  };
+ const handleNext = () => {
+  const hasAtLeastOne = photos.some((p) => p !== null);
+  if (hasAtLeastOne) {
+updateOnboardingData({ imageUrl: photos.filter((p) => p !== null).slice(0, 5) as string[] });
+    console.log("Current context data", onboardingData);
+    router.push('/location');
+  } else {
+    Alert.alert('Upload Required', 'Please upload at least one photo.');
+  }
+};
 
   const handleBack = () => {
     router.back();

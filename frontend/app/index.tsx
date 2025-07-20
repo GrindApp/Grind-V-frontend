@@ -7,20 +7,50 @@ import { useEffect } from "react";
 
 export default function Index() {
    const router = useRouter();
+  useEffect(() => {
+  const checkAuthAndOnboarding = async () => {
+    const token = await AsyncStorage.getItem("authToken");
 
+    if (!token) {
+      return router.replace("/login");
+    }
 
-    useEffect(() => {
-    const checkAuth = async () => {
-      const token = await AsyncStorage.getItem("authToken");
-      if (token) {
-        router.replace("/(tabs)/(home)/HomeScreen"); 
+    const res = await fetch("http://172.20.10.4:3000/api/v1/auth/me", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const json = await res.json();
+
+    if (json.success) {
+      if (json.data.onboarded) {
+        router.replace("/(tabs)/(home)/HomeScreen");
       } else {
-        router.replace("/login"); 
+        router.replace("/(onboarding)/house_rules");
       }
-    };
+    } else {
+      router.replace("/login");
+    }
+  };
 
-    checkAuth();
-  }, []);
+  checkAuthAndOnboarding();
+}, []);
+
+
+  //   useEffect(() => {
+  //   const checkAuth = async () => {
+  //     const token = await AsyncStorage.getItem("authToken");
+  //     if (token) {
+  //       router.replace("/(tabs)/(home)/HomeScreen"); 
+  //     } else {
+  //       router.replace("/login"); 
+  //     }
+  //   };
+
+  //   checkAuth();
+  // }, []);
 
    return (
     <View className="flex-1 justify-center items-center bg-white">
