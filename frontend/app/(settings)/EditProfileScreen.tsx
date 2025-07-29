@@ -1,40 +1,95 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, ScrollView, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, Feather, MaterialIcons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import { router } from "expo-router";
-import { Link } from "expo-router";
-import { useRouter } from 'expo-router';
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons, Feather, MaterialIcons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { decodeJWT } from "@/utils/jwt";
 
 const EditProfileScreen = () => {
-  const [formData, setFormData] = useState({
-    fullName: 'AYUSH VERMA',
-    username: 'ayuver2970',
-    bio: 'No Pain No Gain',
-  });
-  
-  const [profileImage, setProfileImage] = useState('https://placehold.co/150x150');
-  const [grindImage, setGrindImage] = useState('https://placehold.co/150x150?text=Grind');
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [profileId, setProfileId] = useState<string | null>(null);
 
-  
-const router = useRouter();
-  
-  // Character count for bio
-  const bioCharCount = formData.bio.length;
+  const [formDataState, setFormData] = useState({
+    fullName: "",
+    username: "",
+    bio: "",
+  });
+
+  const [profileImage, setProfileImage] = useState("");
+  const [grindImage, setGrindImage] = useState("");
+  const bioCharCount = formDataState.bio?.length || 0;
   const MAX_BIO_CHARS = 140;
 
+  // 🔁 Fetch profile on mount
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const token = await AsyncStorage.getItem("authToken");
+        if (!token) throw new Error("Token not found");
+        const decoded = decodeJWT(token);
+        const userId = decoded?.id || decoded?._id;
+        if (!userId) throw new Error("User ID not found");
+
+        const [profileRes, userRes] = await Promise.all([
+          fetch(`http://172.20.10.4:3000/api/v1/userProfile/user/${userId}`, {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`http://172.20.10.4:3000/api/v1/user/${userId}`, {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        const profileJson = await profileRes.json();
+        const userJson = await userRes.json();
+
+        if (!profileJson.success) throw new Error(profileJson.message || "Failed to load profile");
+        if (!userJson.success) throw new Error(userJson.message || "Failed to load user");
+
+        const userProfile = profileJson.data;
+        const userAccount = userJson.data;
+        setProfileId(userProfile._id);
+
+        setFormData({
+          fullName: `${userProfile.firstName} ${userProfile.lastName}`,
+          username: userAccount.username || "",
+          bio: userProfile.bio || "",
+        });
+
+        setProfileImage(userProfile.imageUrl?.[0] || "");
+        setGrindImage(userProfile.imageUrl?.[1] || "");
+      } catch (err) {
+        console.error("Failed to load profile:", err);
+        Alert.alert("Error", err.message || "Failed to load profile");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
+
   const handleInputChange = (field: string, value: string) => {
-    setFormData({
-      ...formData,
-      [field]: value
-    });
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const pickImage = async (imageType: string) => {
+  const pickImage = async (type: "profile" | "grind") => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need camera roll permission to upload images.');
+    if (status !== "granted") {
+      Alert.alert("Permission required", "We need access to your photos.");
       return;
     }
 
@@ -46,182 +101,154 @@ const router = useRouter();
     });
 
     if (!result.canceled) {
-      if (imageType === 'profile') {
-        setProfileImage(result.assets[0].uri);
-      } else {
-        setGrindImage(result.assets[0].uri);
-      }
+      const uri = result.assets[0].uri;
+      type === "profile" ? setProfileImage(uri) : setGrindImage(uri);
     }
   };
 
-  const handleSaveChanges = () => {
-    Alert.alert('Success', 'Profile updated successfully!');
-  };
+  const handleSaveChanges = async () => {
+  try {
+    setLoading(true);
+    const token = await AsyncStorage.getItem("authToken");
+    if (!token) throw new Error("Token not found");
+    if (!profileId) throw new Error("Profile ID not found");
 
+    const body = {
+      bio: formDataState.bio,
+      imageUrl: [profileImage, grindImage].filter(Boolean), // optional
+    };
+
+    const res = await fetch(`http://172.20.10.4:3000/api/v1/userProfile/user/${profileId}`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json", // ✅ Important for JSON
+      },
+      body: JSON.stringify(body),
+    });
+
+    const json = await res.json();
+    if (!json.success) throw new Error(json.message || "Update failed");
+
+    Alert.alert("Success", "Profile updated successfully!");
+  } catch (err: any) {
+    console.error("Update error:", err);
+    Alert.alert("Error", err.message || "Failed to update profile");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  if (loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-primary justify-center items-center">
+        <ActivityIndicator size="large" color="#fff" />
+        <Text className="text-white mt-4">Loading Profile...</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-primary">
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
-        contentContainerStyle={{ paddingBottom: 80 }}
-        className="px-5"
-      >
+      <ScrollView showsVerticalScrollIndicator={false} className="px-5">
         {/* Header */}
         <View className="flex-row items-center mb-4 space-x-4">
-         <TouchableOpacity 
-           onPress={() => router.back()}
-           className="p-2 bg-zinc-800/80 rounded-full"
-           activeOpacity={0.7}
-         >
-           <Ionicons name="chevron-back" size={18} color="white" />
-         </TouchableOpacity>
-         
-         <Text className="text-white text-2xl font-bold"> Edit Profile</Text>
-       </View>
-
-        {/* Profile Pictures */}
-        <View className="flex-row justify-around mb-10">
-          {/* Profile Pic */}
-          <View className="items-center">
-            <View className="relative mb-3">
-              <View className="w-32 h-32 rounded-full overflow-hidden border-2 border-accent">
-                <Image
-                  source={{ uri: profileImage }}
-                  className="w-full h-full"
-                  resizeMode="cover"
-                />
-              </View>
-              <TouchableOpacity 
-                className="absolute bottom-0 right-0 bg-accent p-2 rounded-full shadow"
-                onPress={() => pickImage('profile')}
-              >
-                <Feather name="camera" size={16} color="white" />
-              </TouchableOpacity>
-            </View>
-            <Text className="text-gray-300 text-sm">Profile Picture</Text>
-          </View>
-
-          {/* Grind Pic */}
-          <View className="items-center">
-            <View className="relative mb-3">
-              <View className="w-32 h-32 rounded-full overflow-hidden border-2 border-gray-700">
-                <Image
-                  source={{ uri: grindImage }}
-                  className="w-full h-full"
-                  resizeMode="cover"
-                />
-              </View>
-              <TouchableOpacity 
-                className="absolute bottom-0 right-0 bg-accent p-2 rounded-full shadow"
-                onPress={() => pickImage('grind')}
-              >
-                <Feather name="camera" size={16} color="white" />
-              </TouchableOpacity>
-            </View>
-            <Text className="text-gray-300 text-sm">Grind Picture</Text>
-          </View>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="p-2 bg-zinc-800/80 rounded-full"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={18} color="white" />
+          </TouchableOpacity>
+          <Text className="text-white text-2xl font-bold">Edit Profile</Text>
         </View>
 
-        {/* Input Fields Section */}
-        <View className="rounded-2xl bg-[#1C1C1E] p-3 mb-6">
-          {/* Full Name */}
-          <View className="mb-6">
-            <View className="flex-row justify-between mb-2">
-              <Text className="text-gray-300 font-medium">Full Name</Text>
-              {/* <Feather name="user" size={16} color="#EF4444" /> */}
+        {/* Images */}
+        <View className="flex-row justify-around mb-10">
+          {[{ label: "Profile", image: profileImage, type: "profile" }, { label: "Grind", image: grindImage, type: "grind" }].map(({ label, image, type }) => (
+            <View key={type} className="items-center">
+              <View className="relative mb-3">
+                <View className="w-32 h-32 rounded-full overflow-hidden border-2 border-accent">
+                  {image ? (
+                    <Image source={{ uri: image }} className="w-full h-full" resizeMode="cover" />
+                  ) : (
+                    <Text className="text-white text-xs text-center mt-12">No Image</Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  className="absolute bottom-0 right-0 bg-accent p-2 rounded-full shadow"
+                  onPress={() => pickImage(type as "profile" | "grind")}
+                >
+                  <Feather name="camera" size={16} color="white" />
+                </TouchableOpacity>
+              </View>
+              <Text className="text-gray-300 text-sm">{label} Picture</Text>
             </View>
+          ))}
+        </View>
+
+        {/* Form Inputs */}
+        <View className="rounded-2xl bg-[#1C1C1E] p-3 mb-6">
+          <View className="mb-6">
+            <Text className="text-gray-300 font-medium mb-2">Full Name</Text>
             <TextInput
               placeholder="Enter your full name"
               placeholderTextColor="#666"
-              value={formData.fullName}
-              onChangeText={(text) => handleInputChange('fullName', text)}
+              value={formDataState.fullName}
+              editable={false}
               className="bg-[#2C2C2E] text-white rounded-xl px-4 py-3.5 text-base"
             />
           </View>
 
-          {/* Username */}
           <View className="mb-6">
-            <View className="flex-row justify-between mb-2">
-              <Text className="text-gray-300 font-medium">Username</Text>
-              {/* <Feather name="at-sign" size={16} color="#EF4444" /> */}
-            </View>
+            <Text className="text-gray-300 font-medium mb-2">Username</Text>
             <TextInput
               placeholder="Choose a username"
               placeholderTextColor="#666"
-              value={formData.username}
-              onChangeText={(text) => handleInputChange('username', text)}
+              value={formDataState.username}
+              editable={false}
               className="bg-[#2C2C2E] text-white rounded-xl px-4 py-3.5 text-base"
             />
           </View>
 
           {/* Bio */}
           <View>
-            <View className="flex-row justify-between mb-2">
-              <Text className="text-gray-300 font-medium">Bio</Text>
-              {/* <Feather name="edit-3" size={16} color="#EF4444" /> */}
-            </View>
+            <Text className="text-gray-300 font-medium mb-2">Bio</Text>
             <View className="bg-[#2C2C2E] rounded-xl px-4 py-3 relative">
               <TextInput
                 placeholder="Write something about yourself"
                 placeholderTextColor="#666"
-                value={formData.bio}
-                onChangeText={(text) => handleInputChange('bio', text.slice(0, MAX_BIO_CHARS))}
+                value={formDataState.bio}
+                onChangeText={(text) =>
+                  handleInputChange("bio", text.slice(0, MAX_BIO_CHARS))
+                }
                 className="text-white text-base"
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
               />
-              <Text className={`absolute bottom-2 right-4 text-xs ${bioCharCount > MAX_BIO_CHARS * 0.8 ? 'text-accent' : 'text-gray-500'}`}>
-  {bioCharCount}/{MAX_BIO_CHARS}
-</Text>
-
+              <Text
+                className={`absolute bottom-2 right-4 text-xs ${
+                  bioCharCount > MAX_BIO_CHARS * 0.8
+                    ? "text-accent"
+                    : "text-gray-500"
+                }`}
+              >
+                {bioCharCount}/{MAX_BIO_CHARS}
+              </Text>
             </View>
           </View>
         </View>
 
-        {/* Additional Settings */}
-        <View className="rounded-2xl bg-[#1C1C1E] p-5 mb-6">
-          <TouchableOpacity 
-            className="flex-row justify-between items-center py-3"
-            onPress={() => router.push('/components/ForgotPassword')}
-          >
-            <View className="flex-row items-center">
-              <Feather name="lock" size={18} color="#999999" className="mr-3" />
-              <Text className="text-white font-medium">Change Password</Text>
-             
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="gray" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity className="flex-row justify-between items-center py-3" onPress={() => router.push('/(settings)/PrivacySettings')}>
-            <View className="flex-row items-center">
-              <MaterialIcons name="privacy-tip" size={18} color="#999999" className="mr-3" />
-              <Text className="text-white font-medium">Privacy Settings</Text>
-              
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="gray" />
-          </TouchableOpacity>
-          
-          <TouchableOpacity className="flex-row justify-between items-center py-3"  onPress={() => router.push('/(settings)/NotificationPreferences')}>
-            <View className="flex-row items-center">
-              <Feather name="bell" size={18} color="#999999" className="mr-3" />
-              <Text className="text-white font-medium">Notification Preferences</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="gray" />
-          </TouchableOpacity>
-        </View>
-
         {/* Save Button */}
-        <TouchableOpacity 
+        <TouchableOpacity
           className="mt-6 py-4 bg-accent rounded-xl items-center shadow"
           onPress={handleSaveChanges}
         >
-          <Text className="text-white font-bold tracking-wide text-base">SAVE CHANGES</Text>
-        </TouchableOpacity>
-        
-        {/* Delete Account Option */}
-        <TouchableOpacity className="mt-10 items-center">
-          <Text className="text-gray-500">Delete Account</Text>
+          <Text className="text-white font-bold tracking-wide text-base">
+            SAVE CHANGES
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
