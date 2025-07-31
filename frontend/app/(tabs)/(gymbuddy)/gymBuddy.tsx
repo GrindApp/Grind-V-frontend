@@ -1,15 +1,24 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Dimensions, Animated, Image, TouchableOpacity } from 'react-native';
-import Swiper from 'react-native-deck-swiper';
-import { LinearGradient } from 'expo-linear-gradient';
+import React, { useState, useRef, useEffect } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  Animated,
+  Image,
+  TouchableOpacity,
+} from "react-native";
+import Swiper from "react-native-deck-swiper";
+import { LinearGradient } from "expo-linear-gradient";
 import { decodeJWT } from "@/utils/jwt";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from "@expo/vector-icons";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 type GymBuddy = {
   id: string;
+  user: string;
   name: string;
   age: number;
   distance: string;
@@ -29,60 +38,95 @@ const GymBuddyScreen = () => {
   const likeOpacity = useRef(new Animated.Value(0)).current;
   const nopeOpacity = useRef(new Animated.Value(0)).current;
 
-  // 👇 Fetch data from the API
+  useEffect(() => {
+    const fetchGymBuddies = async () => {
+      try {
+        const token = await AsyncStorage.getItem("authToken");
+        if (!token) throw new Error("Token not found");
 
+        const decoded = decodeJWT(token);
+        console.log("User ID:", decoded?.id || decoded?._id);
 
-useEffect(() => {
-  const fetchGymBuddies = async () => {
-    try {
-      const token = await AsyncStorage.getItem("authToken");
-      if (!token) throw new Error("Token not found");
+        const response = await fetch(
+          "http://172.20.10.4:3000/api/v1/user-profile?page=1&limit=10",
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-      // Optional: decode token if needed
-      const decoded = decodeJWT(token);
-      console.log("User ID:", decoded?.id || decoded?._id); // for debug
+        if (!response.ok) throw new Error("Failed to fetch profiles.");
 
-      const response = await fetch('http://172.20.10.4:3000/api/v1/user-profile?page=1&limit=10', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+        const result = await response.json();
+        const profiles = result.data || [];
 
-      if (!response.ok) throw new Error('Failed to fetch profiles.');
+        const transformed = profiles.map((p: any) => ({
+          id: p._id,
+          user: p.user,
+          name: p.firstName || "Unknown",
+          age: new Date().getFullYear() - new Date(p.dateOfBirth).getFullYear(),
+          distance: `${Math.floor(Math.random() * 10) + 1} km`,
+          bio: p.bio || "Let’s work out together!",
+          image: p.imageUrl?.[0] || "https://via.placeholder.com/400",
+          // points: Math.floor(Math.random() * 1000) + 1000,
+          tags: p.interests
+            ?.slice(0, 3)
+            .map((interest: any) => interest.name) || ["Fitness"],
+        }));
 
-      const result = await response.json();
-    
-      const profiles = result.data || [];
+        setGymBuddies(transformed);
+      } catch (error) {
+        console.error("Error fetching gym buddies:", error);
+      }
+    };
 
-      console.log(profiles);
+    fetchGymBuddies();
+  }, []);
 
-      const transformed = profiles.map((p: any) => ({
-        id: p._id,
-        name: p.firstName || 'Unknown',
-        age: new Date().getFullYear() - new Date(p.dateOfBirth).getFullYear(),
-        distance: `${Math.floor(Math.random() * 10) + 1} km`,
-        bio: p.bio || 'Let’s work out together!',
-        image: p.imageUrl?.[0] || 'https://via.placeholder.com/400',
-        points: Math.floor(Math.random() * 1000) + 1000,
-        tags: p.interests?.slice(0, 3) || ['Fitness'],
-      }));
-
-      setGymBuddies(transformed);
-    } catch (error) {
-      console.error("Error fetching gym buddies:", error);
-    }
-  };
-
-  fetchGymBuddies();
-}, []);
-
-
-  const handleSwipe = (cardIndex: number) => {
+  const handleSwipe = async (
+    cardIndex: number,
+    direction: "left" | "right"
+  ) => {
     const nextIndex = cardIndex + 1;
     setIndex(nextIndex);
     if (nextIndex === gymBuddies.length) {
       setIsOutOfCards(true);
+    }
+
+    const swipedUser = gymBuddies[cardIndex];
+    if (!swipedUser) return;
+
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      if (!token) throw new Error("Token not found");
+
+      const decoded = decodeJWT(token);
+      const swiperId = decoded?.id || decoded?._id;
+
+      const response = await fetch(
+        "http://172.20.10.4:3000/api/v1/swipeUser/swipes",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            swiperId,
+            swipedId: swipedUser.user,
+            direction,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Failed to save swipe:", errorData);
+      }
+    } catch (error) {
+      console.error("Swipe API Error:", error);
     }
   };
 
@@ -106,24 +150,34 @@ useEffect(() => {
   };
 
   const swipeLeft = () => {
-    animateButtons(false);
-    swiperRef.current?.swipeLeft();
+    if (swiperRef.current && !isOutOfCards) {
+      console.log("Swiping Left");
+      animateButtons(false);
+      swiperRef.current.swipeLeft();
+    }
   };
 
   const swipeRight = () => {
-    animateButtons(true);
-    swiperRef.current?.swipeRight();
+    if (swiperRef.current && !isOutOfCards) {
+      console.log("Swiping Right");
+      animateButtons(true);
+      swiperRef.current.swipeRight();
+    }
   };
 
   const renderCard = (buddy: GymBuddy) => {
-      if (!buddy) return null;
+    if (!buddy) return null;
     return (
       <View style={styles.card}>
         <Image source={{ uri: buddy.image }} style={styles.image} />
-
-        <LinearGradient colors={['transparent', '#000']} style={styles.gradient} />
+        <LinearGradient
+          colors={["transparent", "#000"]}
+          style={styles.gradient}
+        />
         <View style={styles.cardContent}>
-          <Text style={styles.name}>{buddy.name}, {buddy.age}</Text>
+          <Text style={styles.name}>
+            {buddy.name}, {buddy.age}
+          </Text>
           <Text style={styles.distance}>{buddy.distance} away</Text>
           <Text style={styles.bio}>{buddy.bio}</Text>
           <View style={styles.tagsContainer}>
@@ -140,20 +194,23 @@ useEffect(() => {
 
   return (
     <View style={styles.container}>
-      <Swiper
-        ref={swiperRef}
-        cards={gymBuddies}
-        renderCard={renderCard}
-        onSwiped={handleSwipe}
-        cardIndex={index}
-        backgroundColor="transparent"
-        stackSize={3}
-        infinite={false}
-        showSecondCard
-        animateCardOpacity
-        verticalSwipe={false}
-        onSwipedAll={() => setIsOutOfCards(true)}
-      />
+      <View style={styles.swiperContainer}>
+        <Swiper
+          ref={swiperRef}
+          cards={gymBuddies}
+          renderCard={renderCard}
+          onSwipedLeft={(cardIndex) => handleSwipe(cardIndex, "left")}
+          onSwipedRight={(cardIndex) => handleSwipe(cardIndex, "right")}
+          cardIndex={index}
+          backgroundColor="transparent"
+          stackSize={3}
+          infinite={false}
+          showSecondCard
+          animateCardOpacity
+          verticalSwipe={false}
+          onSwipedAll={() => setIsOutOfCards(true)}
+        />
+      </View>
 
       {isOutOfCards && (
         <View style={styles.outOfCards}>
@@ -161,14 +218,17 @@ useEffect(() => {
         </View>
       )}
 
-      <View style={styles.buttons}>
-        <TouchableOpacity onPress={swipeLeft} style={styles.nopeButton}>
-          <Ionicons name="close-circle" size={64} color="#ff6b6b" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={swipeRight} style={styles.likeButton}>
-          <Ionicons name="heart-circle" size={64} color="#4cd137" />
-        </TouchableOpacity>
-      </View>
+      {/* Buttons Overlay */}
+      {!isOutOfCards && (
+        <View style={styles.buttonsContainer}>
+          <TouchableOpacity onPress={swipeLeft} style={styles.nopeButton}>
+            <Ionicons name="close-circle" size={64} color="#ff6b6b" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={swipeRight} style={styles.likeButton}>
+            <Ionicons name="heart-circle" size={64} color="#4cd137" />
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -178,54 +238,57 @@ export default GymBuddyScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
+    backgroundColor: "#000",
+  },
+  swiperContainer: {
+    flex: 1,
+    justifyContent: "center",
   },
   card: {
-    height: '75%',
+    height: "75%",
     borderRadius: 20,
-    overflow: 'hidden',
-    backgroundColor: '#1e1e1e',
+    overflow: "hidden",
+    backgroundColor: "#1e1e1e",
   },
   image: {
-    height: '100%',
-    width: '100%',
-    position: 'absolute',
+    height: "100%",
+    width: "100%",
+    position: "absolute",
   },
   gradient: {
-    position: 'absolute',
-    height: '100%',
-    width: '100%',
+    position: "absolute",
+    height: "100%",
+    width: "100%",
     bottom: 0,
   },
   cardContent: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 30,
     left: 20,
   },
   name: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 26,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   distance: {
-    color: '#ddd',
+    color: "#ddd",
     fontSize: 14,
     marginTop: 2,
   },
   bio: {
-    color: '#ccc',
+    color: "#ccc",
     marginTop: 10,
     fontSize: 14,
     maxWidth: width * 0.8,
   },
   tagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     marginTop: 10,
   },
   tag: {
-    backgroundColor: '#333',
+    backgroundColor: "#333",
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -233,24 +296,31 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   tagText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 12,
   },
-  buttons: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
-    padding: 20,
-    marginTop: 20,
+  buttonsContainer: {
+    position: "absolute",
+    bottom: 40,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "space-evenly",
+    zIndex: 10,
   },
-  nopeButton: {},
-  likeButton: {},
+  nopeButton: {
+    backgroundColor: "transparent",
+  },
+  likeButton: {
+    backgroundColor: "transparent",
+  },
   outOfCards: {
-    position: 'absolute',
-    top: '50%',
-    alignSelf: 'center',
+    position: "absolute",
+    top: "50%",
+    alignSelf: "center",
   },
   outOfCardsText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 18,
   },
 });
