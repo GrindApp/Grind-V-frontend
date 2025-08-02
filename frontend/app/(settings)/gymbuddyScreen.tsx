@@ -26,6 +26,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Easing } from "react-native";
 import { router } from "expo-router";
+import { decodeJWT } from "@/utils/jwt";
 
 interface Buddy {
   id: string;
@@ -98,6 +99,7 @@ const GymBuddyScreen = () => {
   const [selectedBuddy, setSelectedBuddy] = useState<Buddy | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [showModal, setShowModal] = useState(false);
+  
 
   // Custom animated bottom sheet
   const slideAnim = useRef(new Animated.Value(height)).current;
@@ -673,24 +675,6 @@ const GymBuddyScreen = () => {
             </Animated.View>
           </Animated.View>
         )}
-
-        {/* Add Buddy Button */}
-        {/* {activeTab !== "blocked" && (
-          <TouchableOpacity
-            className="absolute bottom-6 right-6 bg-red-500 w-14 h-14 rounded-full justify-center items-center shadow-lg"
-            style={{
-              shadowColor: "#ef4444",
-              shadowOpacity: 0.3,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 5 },
-            }}
-            onPress={() => console.log("Add new buddy")}
-          >
-            <Ionicons name="add" size={30} color="#ffffff" />
-          </TouchableOpacity>
-        )} */}
-
-        {/* Custom Bottom Sheet Modal */}
         <Modal
           visible={showModal}
           transparent={true}

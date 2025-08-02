@@ -91,12 +91,30 @@ const GymBuddyScreen = () => {
   ) => {
     const nextIndex = cardIndex + 1;
     setIndex(nextIndex);
+
     if (nextIndex === gymBuddies.length) {
       setIsOutOfCards(true);
     }
 
     const swipedUser = gymBuddies[cardIndex];
     if (!swipedUser) return;
+
+    console.log("Swiped user:", {
+  id: swipedUser.id,
+  user: swipedUser.user,
+  fullObject: swipedUser
+});
+
+// Also log what you're sending to each API
+console.log("Sending to swipe API:", {
+  
+  swipedId: swipedUser.id,
+  direction,
+});
+
+console.log("Sending to friend request API:", {
+  toUserId: swipedUser.user,
+});
 
     try {
       const token = await AsyncStorage.getItem("authToken");
@@ -105,7 +123,8 @@ const GymBuddyScreen = () => {
       const decoded = decodeJWT(token);
       const swiperId = decoded?.id || decoded?._id;
 
-      const response = await fetch(
+      // Save the swipe
+      const swipeResponse = await fetch(
         "http://172.20.10.4:3000/api/v1/swipeUser/swipes",
         {
           method: "POST",
@@ -115,20 +134,89 @@ const GymBuddyScreen = () => {
           },
           body: JSON.stringify({
             swiperId,
-            swipedId: swipedUser.user,
+            swipedId: swipedUser.id,
             direction,
           }),
         }
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Failed to save swipe:", errorData);
+      if (!swipeResponse.ok) {
+        console.error("Failed to save swipe");
+      }
+
+      // If swiped right, send friend request
+      if (direction === "right") {
+        const friendRequestResponse = await fetch(
+          "http://172.20.10.4:3000/api/v1/friends/send-request",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+ receiverId: swipedUser.id,             }),
+          }
+        );
+
+        if (!friendRequestResponse.ok) {
+          const errorData = await friendRequestResponse.json();
+          if (errorData.message.includes("already exists")) {
+            console.log("Friend request already sent");
+          } else {
+            console.error("Friend request error:", errorData.message);
+          }
+        }
       }
     } catch (error) {
       console.error("Swipe API Error:", error);
     }
   };
+
+  // const handleSwipe = async (
+  //   cardIndex: number,
+  //   direction: "left" | "right"
+  // ) => {
+  //   const nextIndex = cardIndex + 1;
+  //   setIndex(nextIndex);
+  //   if (nextIndex === gymBuddies.length) {
+  //     setIsOutOfCards(true);
+  //   }
+
+  //   const swipedUser = gymBuddies[cardIndex];
+  //   if (!swipedUser) return;
+
+  //   try {
+  //     const token = await AsyncStorage.getItem("authToken");
+  //     if (!token) throw new Error("Token not found");
+
+  //     const decoded = decodeJWT(token);
+  //     const swiperId = decoded?.id || decoded?._id;
+
+  //     const response = await fetch(
+  //       "http://172.20.10.4:3000/api/v1/swipeUser/swipes",
+  //       {
+  //         method: "POST",
+  //         headers: {
+  //           "Content-Type": "application/json",
+  //           Authorization: `Bearer ${token}`,
+  //         },
+  //         body: JSON.stringify({
+  //           swiperId,
+  //           swipedId: swipedUser.user,
+  //           direction,
+  //         }),
+  //       }
+  //     );
+
+  //     if (!response.ok) {
+  //       const errorData = await response.json();
+  //       console.error("Failed to save swipe:", errorData);
+  //     }
+  //   } catch (error) {
+  //     console.error("Swipe API Error:", error);
+  //   }
+  // };
 
   const animateButtons = (isLike: boolean) => {
     Animated.parallel([
