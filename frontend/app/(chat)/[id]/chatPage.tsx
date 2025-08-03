@@ -1,415 +1,415 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { useNavigation } from '@react-navigation/native';
-import {
-  View,
-  Text,
-  Image,
-  TouchableOpacity,
-  TextInput,
-  FlatList,
-  KeyboardAvoidingView,
+import { useEffect, useState, useRef } from "react";
+import { 
+  View, 
+  Text, 
+  FlatList, 
+  TextInput, 
+  TouchableOpacity, 
+  KeyboardAvoidingView, 
   Platform,
-  StatusBar,
-  Keyboard,
-} from 'react-native';
-import { Ionicons, Feather } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+  Dimensions,
+  Image
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import { decodeJWT } from "@/utils/jwt";
 
-// Types
-type Message = {
-  id: string;
-  text: string;
-  sender: 'user' | 'other';
-  timestamp: Date;
-  status?: 'sent' | 'delivered' | 'read';
-};
+const { width } = Dimensions.get('window');
 
-type ChatDetailProps = {
-  route?: {
-    params: {
-      name: string;
-      image: string;
-      status: string;
-    };
-  };
-  navigation?: any;
-};
-
-// Sample data
-const sampleMessages: Message[] = [
-  {
-    id: '1',
-    text: 'Hey, are you going to the gym today?',
-    sender: 'other',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-  },
-  {
-    id: '2',
-    text: 'Yes, planning to go around 6pm. Want to join?',
-    sender: 'user',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1.5), // 1.5 hours ago
-    status: 'read',
-  },
-  {
-    id: '3',
-    text: `Perfect! I'll meet you there. Let's do a leg workout today.`,
-    sender: 'other',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1), // 1 hour ago
-  },
-  {
-    id: '4',
-    text: `Sounds good! I've been wanting to work on squats.`,
-    sender: 'user',
-    timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-    status: 'read',
-  },
-  {
-    id: '5',
-    text: 'Great, I can help you with your form. See you at 6!',
-    sender: 'other',
-    timestamp: new Date(Date.now() - 1000 * 60 * 25), // 25 minutes ago
-  },
-  {
-    id: '6',
-    text: 'Thanks! I appreciate that. See you soon!',
-    sender: 'user',
-    timestamp: new Date(Date.now() - 1000 * 60 * 20), // 20 minutes ago
-    status: 'delivered',
-  },
-];
-
-// Utility functions
-const formatTime = (date: Date) => {
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-};
-
-const formatDate = (date: Date) => {
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  
-  if (date.toDateString() === today.toDateString()) {
-    return 'Today';
-  } else if (date.toDateString() === yesterday.toDateString()) {
-    return 'Yesterday';
-  } else {
-    return date.toLocaleDateString([], {
-      month: 'short',
-      day: 'numeric',
-    });
-  }
-};
-
-// Components
-const ChatHeader = ({ contact, onBack }: { contact: any; onBack: () => void }) => (
-  <View className="flex-row items-center px-4 py-3 border-b border-primary bg-primary">
-    <TouchableOpacity 
-      className="mr-3"
-      onPress={onBack}
-    >
-      <Ionicons name="chevron-back" size={24} color="white" />
-    </TouchableOpacity>
-    
-    <Image 
-      source={{ uri: contact.image }} 
-      className="w-10 h-10 rounded-full"
-    />
-    
-    <View className="flex-1 ml-3">
-      <Text className="text-white font-medium text-base">
-        {contact.name}
-      </Text>
-      <Text className="text-green-500 text-xs">
-        {contact.status === 'online' ? 'Online' : contact.status}
-      </Text>
-    </View>
-    
-    <TouchableOpacity className="p-2">
-      <Feather name="phone" size={20} color="white" />
-    </TouchableOpacity>
-    
-    <TouchableOpacity className="p-2 ml-2">
-      <Feather name="more-vertical" size={20} color="white" />
-    </TouchableOpacity>
-  </View>
-);
-
-const DateHeader = ({ date }: { date: any }) => (
-  <View className="py-2 items-center">
-    <Text className="text-secondary text-xs bg-primary px-3 py-1 rounded-full">
-      {date}
-    </Text>
-  </View>
-);
-
-const MessageStatus = ({ status }: { status: string }) => {
-  if (!status) return null;
-  
-  const iconMap: { [key: string]: JSX.Element } = {
-    sent: <Ionicons name="checkmark" size={16} color="#777" />,
-    delivered: <Ionicons name="checkmark-done" size={16} color="#777" />,
-    read: <Ionicons name="checkmark-done" size={16} color="#3b82f6" />
-  };
-  
-  return iconMap[status] || "";
-};
-
-const MessageBubble = ({ message, contactImage }: { message: Message; contactImage: string }) => (
-  <View 
-    className={`flex-row my-1 mx-3 ${
-      message.sender === 'user' ? 'justify-end' : 'justify-start'
-    }`}
-  >
-    {message.sender === 'other' && (
-      <Image 
-        source={{ uri: contactImage }} 
-        className="w-8 h-8 rounded-full mr-2 mt-1"
-      />
-    )}
-    
-    <View className="max-w-[75%] flex-row">
-      <View 
-        className={`px-4 py-2.5 rounded-2xl ${
-          message.sender === 'user' 
-            ? 'bg-accent rounded-tr-none' 
-            : 'bg-primary rounded-tl-none'
-        }`}
-      >
-        <Text className="text-white">
-          {message.text}
-        </Text>
-        
-        <View className="flex-row items-center justify-end mt-1">
-          <Text className="text-xs text-gray-300 mr-1">
-            {formatTime(message.timestamp)}
-          </Text>
-          {message.sender === 'user' && <MessageStatus status={message.status || ''} />}
-        </View>
-      </View>
-    </View>
-  </View>
-);
-
-const TypingIndicator = ({ isVisible, contactImage }: { isVisible: boolean; contactImage: string }) => {
-  if (!isVisible) return null;
-  
-  return (
-    <View className="flex-row items-center mx-4 mb-2">
-      <Image 
-        source={{ uri: contactImage }} 
-        className="w-8 h-8 rounded-full mr-2"
-      />
-      <View className="bg-primary px-4 py-3 rounded-2xl rounded-tl-none">
-        <View className="flex-row items-center space-x-1">
-          <View className="w-2 h-2 bg-secondary rounded-full animate-bounce" />
-          <View className="w-2 h-2 bg-secondary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-          <View className="w-2 h-2 bg-secondary rounded-full animate-bounce" style={{ animationDelay: '0.4s' }} />
-        </View>
-      </View>
-    </View>
-  );
-};
-
-const ChatInput = ({ inputText, setInputText, handleSend }: { inputText: string; setInputText: (text: string) => void; handleSend: () => void }) => (
-  <View className="flex-row items-center px-4 py-2 border-t border-primary bg-black">
-    <TouchableOpacity className="p-2 mr-2">
-      <Feather name="plus-circle" size={24} color="#777" />
-    </TouchableOpacity>
-    
-    <View className="flex-1 flex-row items-center bg-primary rounded-full px-4 py-2">
-      <TextInput
-        className="flex-1 text-white"
-        placeholder="Type a message..."
-        placeholderTextColor="#777"
-        value={inputText}
-        onChangeText={setInputText}
-        multiline
-        maxLength={500}
-      />
-      
-      <TouchableOpacity className="ml-2 p-1">
-        <Feather name="smile" size={20} color="#777" />
-      </TouchableOpacity>
-    </View>
-    
-    <TouchableOpacity 
-      className={`p-2 ml-2 ${!inputText.trim() ? 'opacity-50' : ''}`}
-      onPress={handleSend}
-      disabled={!inputText.trim()}
-    >
-      <View className="bg-accent w-10 h-10 rounded-full items-center justify-center">
-        <Feather name="send" size={18} color="white" />
-      </View>
-    </TouchableOpacity>
-  </View>
-);
-
-// Main component
-const ChatDetailScreen: React.FC<ChatDetailProps> = ({ route }) => {
-  const navigation = useNavigation();
-  // If no route params are provided, use default values
-  const contact = route?.params || {
-    name: 'Rajesh Shukla',
-    image: 'https://randomuser.me/api/portraits/men/32.jpg',
-    status: 'online',
-  };
-
-  const [messages, setMessages] = useState<Message[]>(sampleMessages);
-  const [inputText, setInputText] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  
+export default function ChatPage() {
+  const { id: friendshipId } = useLocalSearchParams();
+  const router = useRouter();
+  const [messages, setMessages] = useState<any[]>([]);
+  const [text, setText] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [otherUser, setOtherUser] = useState<any>(null);
   const flatListRef = useRef<FlatList>(null);
 
+  // Get current user ID first, then fetch messages
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      () => {
-        setKeyboardVisible(true);
-        scrollToBottom();
-      }
-    );
-    const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
-      () => {
-        setKeyboardVisible(false);
-      }
-    );
+    const initializeChat = async () => {
+      try {
+        const token = await AsyncStorage.getItem("authToken");
+        if (!token) throw new Error("Token not found");
 
-    // Simulate typing indicator
-    const typingTimeout = setTimeout(() => {
-      setIsTyping(true);
-      setTimeout(() => setIsTyping(false), 3000);
-    }, 2000);
+        // Get the actual user ID from JWT token (this should be unique per user)
+        const decoded: any = decodeJWT(token);
+        const userId = decoded?.id;
+        
+        console.log("Current user JWT ID:", userId);
+        setCurrentUserId(userId);
 
-    return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
-      clearTimeout(typingTimeout);
+        // Get friendship details using the same endpoint as FriendList
+        const friendshipResponse = await axios.get(
+          "http://172.20.10.4:3000/api/v1/friends/list-friends",
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        // Find the specific friendship by ID
+        const friendship = friendshipResponse.data.data.find(
+          (friend: any) => friend._id === friendshipId
+        );
+
+        if (friendship) {
+          // Determine the other user using the same logic as FriendList
+          const otherUserData = friendship.user1.user === userId ? friendship.user2 : friendship.user1;
+          setOtherUser(otherUserData);
+        }
+
+        // Fetch messages
+        const response = await axios.get(
+          `http://172.20.10.4:3000/api/v1/messages/${friendshipId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        console.log("Message senders:", response.data.map(msg => msg.sender));
+        console.log("Current user matches:", response.data.map(msg => ({
+          text: msg.text,
+          sender: msg.sender,
+          isMe: msg.sender === userId
+        })));
+
+        setMessages(response.data);
+      } catch (error) {
+        console.error("Error initializing chat:", error);
+      }
     };
-  }, []);
 
-  const scrollToBottom = () => {
-    if (flatListRef.current && messages.length > 0) {
-      flatListRef.current.scrollToEnd({ animated: true });
+    initializeChat();
+  }, [friendshipId]);
+
+  // Add polling for real-time updates
+  useEffect(() => {
+    if (!friendshipId || !currentUserId) return;
+
+    const pollMessages = async () => {
+      try {
+        const token = await AsyncStorage.getItem("authToken");
+        if (!token) return;
+
+        const response = await axios.get(
+          `http://172.20.10.4:3000/api/v1/messages/${friendshipId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        // Only update if we have new messages
+        if (response.data.length !== messages.length) {
+          setMessages(response.data);
+        }
+      } catch (error) {
+        console.error("Error polling messages:", error);
+      }
+    };
+
+    // Poll every 2 seconds for new messages
+    const interval = setInterval(pollMessages, 2000);
+
+    return () => clearInterval(interval);
+  }, [friendshipId, currentUserId, messages.length]);
+
+  // Auto scroll to bottom when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+  }, [messages]);
+
+  // Send message
+  const sendMessage = async () => {
+    if (!text.trim() || isLoading) return;
+
+    setIsLoading(true);
+    const messageText = text.trim();
+    setText(""); // Clear input immediately for better UX
+
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      if (!token) throw new Error("Token not found");
+
+      const response = await axios.post(
+        "http://172.20.10.4:3000/api/v1/messages",
+        { friendshipId, text: messageText },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      console.log("Sent message response sender:", response.data.sender);
+      console.log("Current user ID:", currentUserId);
+
+      // Add the new message to state
+      setMessages((prev) => [...prev, response.data]);
+    } catch (error) {
+      console.error("Error sending message:", error);
+      // Restore text if sending failed
+      setText(messageText);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleSend = () => {
-    if (inputText.trim() === '') return;
-
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      text: inputText.trim(),
-      sender: 'user',
-      timestamp: new Date(),
-      status: 'sent',
-    };
-
-    setMessages([...messages, newMessage]);
-    setInputText('');
-
-    // Simulate message being delivered
-    setTimeout(() => {
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === newMessage.id 
-            ? { ...msg, status: 'delivered' } 
-            : msg
-        )
-      );
-    }, 1000);
-
-    // Simulate reply after 2 seconds
-    setTimeout(() => {
-      // First, mark the message as read
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === newMessage.id 
-            ? { ...msg, status: 'read' } 
-            : msg
-        )
-      );
-      
-      // Then simulate typing
-      setIsTyping(true);
-      
-      // After "typing", add the reply
-      setTimeout(() => {
-        setIsTyping(false);
-        
-        const replyMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          text: getRandomReply(),
-          sender: 'other',
-          timestamp: new Date(),
-        };
-        
-        setMessages(prev => [...prev, replyMessage]);
-      }, 2000);
-    }, 2000);
+  // Format time
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    });
   };
 
-  const getRandomReply = () => {
-    const replies = [
-      "That's great! Looking forward to our workout.",
-      "Perfect! Don't forget to bring your water bottle.",
-      "Awesome! I have some new exercises we can try.",
-      "Cool! I'll be there on time.",
-      "Sounds good! Let's crush this workout."
-    ];
-    return replies[Math.floor(Math.random() * replies.length)];
+  // Helper function to normalize user ID for comparison
+  const normalizeUserId = (id: any): string => {
+    if (typeof id === 'object' && id !== null) {
+      return id._id || id.id || String(id);
+    }
+    return String(id);
   };
 
-  const renderItem = ({ item, index }: { item: Message; index: number }) => {
-    const showDateHeader = index === 0 || 
-      formatDate(item.timestamp) !== formatDate(messages[index - 1].timestamp);
+  // Message bubble component
+  const renderMessage = ({ item, index }: any) => {
+    // Normalize both IDs for comparison
+    const messageSenderId = normalizeUserId(item.sender);
+    const userId = normalizeUserId(currentUserId);
+    const isMe = messageSenderId === userId;
     
+    // Debug logging
+    console.log(`Message ${index}: "${item.text}"`);
+    console.log(`  Raw sender:`, item.sender);
+    console.log(`  Normalized sender: "${messageSenderId}"`);
+    console.log(`  Normalized user: "${userId}"`);
+    console.log(`  Is mine: ${isMe}`);
+    console.log('---');
+
+    const prevMessage = index > 0 ? messages[index - 1] : null;
+    const showTime = !prevMessage || 
+      (new Date(item.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() > 300000); // 5 minutes
+
     return (
-      <>
-        {showDateHeader && <DateHeader date={formatDate(item.timestamp)} />}
-        <MessageBubble message={item} contactImage={contact.image} />
-      </>
+      <View style={{ marginBottom: 4 }}>
+        {showTime && (
+          <View style={{ alignItems: 'center', marginVertical: 8 }}>
+            <Text style={{ 
+              color: '#888', 
+              fontSize: 12,
+              backgroundColor: '#2A2A2A',
+              paddingHorizontal: 12,
+              paddingVertical: 4,
+              borderRadius: 12
+            }}>
+              {formatTime(item.createdAt)}
+            </Text>
+          </View>
+        )}
+        
+        {/* Debug indicator */}
+        <View style={{ alignItems: 'center', marginBottom: 2 }}>
+          <Text style={{ 
+            color: isMe ? '#00FF00' : '#FF0000', 
+            fontSize: 10,
+            opacity: 0.7
+          }}>
+            {isMe ? 'ME' : 'THEM'} ({messageSenderId})
+          </Text>
+        </View>
+        
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: isMe ? 'flex-end' : 'flex-start',
+            marginHorizontal: 12,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: isMe ? '#007AFF' : '#3A3A3C',
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              borderRadius: 20,
+              maxWidth: width * 0.75,
+              borderBottomRightRadius: isMe ? 4 : 20,
+              borderBottomLeftRadius: isMe ? 20 : 4,
+              shadowColor: '#000',
+              shadowOffset: {
+                width: 0,
+                height: 1,
+              },
+              shadowOpacity: 0.22,
+              shadowRadius: 2.22,
+              elevation: 3,
+            }}
+          >
+            <Text 
+              style={{ 
+                color: 'white', 
+                fontSize: 16,
+                lineHeight: 20
+              }}
+            >
+              {item.text}
+            </Text>
+          </View>
+        </View>
+      </View>
     );
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-black" edges={['right', 'left', 'top']}>
-      <StatusBar barStyle="light-content" />
-      
-      <ChatHeader 
-        contact={contact} 
-        onBack={() => navigation.goBack()} 
-      />
-      
-      <KeyboardAvoidingView
-        className="flex-1"
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#000000" }}>
+      {/* Debug info at top */}
+      <View style={{ 
+        backgroundColor: '#FF0000', 
+        padding: 8, 
+        alignItems: 'center' 
+      }}>
+        <Text style={{ color: 'white', fontSize: 12 }}>
+          Current User ID: {currentUserId || 'Loading...'}
+        </Text>
+      </View>
+
+      {/* Chat Header */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          backgroundColor: "#1C1C1E",
+          borderBottomWidth: 0.5,
+          borderBottomColor: "#333",
+        }}
+      >
+        {/* Back Button */}
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={{
+            marginRight: 12,
+            padding: 8,
+          }}
+        >
+          <Text style={{ color: "#007AFF", fontSize: 18, fontWeight: "600" }}>
+            ← Back
+          </Text>
+        </TouchableOpacity>
+
+        {otherUser?.imageUrl?.[0] && (
+          <Image
+            source={{ uri: otherUser.imageUrl[0] }}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              marginRight: 12,
+            }}
+          />
+        )}
+        <View style={{ flex: 1 }}>
+          <Text
+            style={{
+              color: "white",
+              fontSize: 18,
+              fontWeight: "600",
+            }}
+          >
+            {otherUser ? `${otherUser.firstName} ${otherUser.lastName}` : "Loading..."}
+          </Text>
+          <Text
+            style={{
+              color: "#8E8E93",
+              fontSize: 14,
+              marginTop: 2,
+            }}
+          >
+            {otherUser ? "Active now" : ""}
+          </Text>
+        </View>
+      </View>
+
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         <FlatList
           ref={flatListRef}
           data={messages}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingVertical: 15 }}
-          onContentSizeChange={scrollToBottom}
+          keyExtractor={(item) => item._id || item.id || Math.random().toString()}
+          renderItem={renderMessage}
+          contentContainerStyle={{ 
+            paddingVertical: 10,
+            flexGrow: 1,
+            justifyContent: 'flex-end'
+          }}
           showsVerticalScrollIndicator={false}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         />
-        
-        <TypingIndicator 
-          isVisible={isTyping} 
-          contactImage={contact.image} 
-        />
-        
-        <ChatInput 
-          inputText={inputText}
-          setInputText={setInputText}
-          handleSend={handleSend}
-        />
+
+        {/* Input Box */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "flex-end",
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            backgroundColor: "#000000",
+            borderTopWidth: 0.5,
+            borderTopColor: "#333",
+          }}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "#1C1C1E",
+              borderRadius: 20,
+              marginRight: 8,
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              maxHeight: 100,
+            }}
+          >
+            <TextInput
+              style={{
+                color: "white",
+                fontSize: 16,
+                lineHeight: 20,
+                minHeight: 20,
+              }}
+              value={text}
+              onChangeText={setText}
+              placeholder="Message"
+              placeholderTextColor="#8E8E93"
+              multiline
+              textAlignVertical="center"
+            />
+          </View>
+          
+          <TouchableOpacity
+            onPress={sendMessage}
+            disabled={!text.trim() || isLoading}
+            style={{
+              backgroundColor: (!text.trim() || isLoading) ? "#1C1C1E" : "#007AFF",
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Text 
+              style={{ 
+                color: (!text.trim() || isLoading) ? "#8E8E93" : "white", 
+                fontSize: 16,
+                fontWeight: "600"
+              }}
+            >
+              ↑
+            </Text>
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
-};
-
-export default ChatDetailScreen;
+}
