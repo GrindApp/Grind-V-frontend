@@ -30,15 +30,15 @@ const GymCard = ({
   reviews = 0,
   price,
   priceCategory = "$$$",
-  tags = [],
   isFavorite = false,
+  amenities,
   onPress,
   onFavoritePress,
 }: GymCardProps) => {
+  console.log("GymItem jjj");
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [favorite, setFavorite] = useState(isFavorite);
-  const maxTagsToShow = 2;
-  const remainingTags = tags.length - maxTagsToShow;
 
   const handleFavoritePress = () => {
     setFavorite(!favorite);
@@ -50,7 +50,7 @@ const GymCard = ({
       onPress={onPress}
       activeOpacity={0.95}
       className="mb-8 bg-[#1C1C1E] rounded-3xl overflow-hidden shadow-xl"
-      style={{ 
+      style={{
         marginHorizontal: 16,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 10 },
@@ -114,37 +114,42 @@ const GymCard = ({
         {/* Rating Badge */}
         <View className="absolute top-4 left-4 bg-black/30 px-2.5 py-1.5 rounded-lg flex-row items-center">
           <Ionicons name="star" size={14} color="#FFD700" />
-          <Text className="text-white font-bold text-sm ml-1">
-            {rating}
-          </Text>
+          <Text className="text-white font-bold text-sm ml-1">{rating}</Text>
           {reviews > 0 && (
             <Text className="text-gray-300 text-xs ml-1">({reviews})</Text>
           )}
         </View>
 
-        {/* Distance Badge */}
+        {/* TODO: Distance Badge */}
         <View className="absolute bottom-4 right-4 bg-black/50 px-2.5 py-1.5 rounded-lg flex-row items-center">
           <Ionicons name="location" size={14} color="#ffffff" />
-          <Text className="text-white text-xs ml-1 font-medium">{distance}</Text>
+          <Text className="text-white text-xs ml-1 font-medium">
+            {"Dwarka"}
+          </Text>
         </View>
       </View>
 
       <View className="p-5">
         {/* Gym Name and Price */}
         <View className="flex-row justify-between items-start mb-2">
-          <Text className="text-white text-xl font-bold flex-1 mr-2" numberOfLines={1}>
+          <Text
+            className="text-white text-xl font-bold flex-1 mr-2"
+            numberOfLines={1}
+          >
             {name}
           </Text>
           {price && (
             <View className="flex-row items-center">
               <Text className="text-green-400 font-bold">{price}</Text>
-              <Text className="text-gray-400 text-xs ml-1">{priceCategory}</Text>
+              <Text className="text-gray-400 text-xs ml-1">
+                {priceCategory}
+              </Text>
             </View>
           )}
         </View>
 
         {/* Tags */}
-        {tags.length > 0 && (
+        {/* {tags.length > 0 && (
           <View className="flex-row flex-wrap mt-3">
             {tags.slice(0, maxTagsToShow).map((tag, index) => (
               <View
@@ -162,17 +167,19 @@ const GymCard = ({
               </View>
             )}
           </View>
-        )}
+        )} */}
 
         {/* Features & Amenities */}
         <View className="flex-row mt-4 justify-between">
-          <View className="flex-row items-center">
-            <View className="w-8 h-8 bg-[#333336] rounded-full items-center justify-center">
-              <Ionicons name="barbell-outline" size={16} color="#fff" />
+          {amenities.map((amenity) => (
+            <View className="flex-row items-center" key={amenity}>
+              <View className="w-8 h-8 bg-[#333336] rounded-full items-center justify-center">
+                <Ionicons name="barbell-outline" size={16} color="#fff" />
+              </View>
+              <Text className="text-gray-300 text-xs ml-2">{amenity}</Text>
             </View>
-            <Text className="text-gray-300 text-xs ml-2">24/7</Text>
-          </View>
-          <View className="flex-row items-center">
+          ))}
+          {/* <View className="flex-row items-center">
             <View className="w-8 h-8 bg-[#333336] rounded-full items-center justify-center">
               <Ionicons name="wifi-outline" size={16} color="#fff" />
             </View>
@@ -189,7 +196,7 @@ const GymCard = ({
               <Ionicons name="people-outline" size={16} color="#fff" />
             </View>
             <Text className="text-gray-300 text-xs ml-2">Classes</Text>
-          </View>
+          </View> */}
         </View>
       </View>
     </TouchableOpacity>
