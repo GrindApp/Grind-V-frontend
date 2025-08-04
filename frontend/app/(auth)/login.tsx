@@ -15,6 +15,7 @@ import FontAwesome from "react-native-vector-icons/FontAwesome";
 import { Link } from "expo-router";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { API_URL } from '@env';
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -23,6 +24,7 @@ const Login = () => {
   const router = useRouter();
 
   const handleLogin = async () => {
+    console.log(email,password)
     if (!email || !password) {
       Alert.alert("Error", "Email and password are required");
       return;
@@ -30,7 +32,7 @@ const Login = () => {
 
     try {
       const response = await fetch(
-        "http://172.20.10.4:3000/api/v1/auth/login",
+        `${API_URL}/api/v1/auth/login`,
         {
           method: "POST",
           headers: {

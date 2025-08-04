@@ -11,6 +11,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useOnboarding } from "@/context/OnboardingContext";
 import { decodeJWT } from "@/utils/jwt";
 import { createProfileFormData } from "@/utils/createProfileFormData";
+import { API_URL } from "@env";
 
 const FinalWelcomeScreen = () => {
   const router = useRouter();
@@ -29,7 +30,7 @@ const FinalWelcomeScreen = () => {
 
   //     const formData = createProfileFormData(onboardingData, userId);
 
-  //     const res1 = await fetch("http://172.20.10.4:3000/api/v1/userProfile", {
+  //     const res1 = await fetch("http://192.168.1.10:3000/api/v1/userProfile", {
   //       method: "POST",
   //       headers: {
   //         Authorization: `Bearer ${token}`, // no Content-Type here
@@ -42,7 +43,7 @@ const FinalWelcomeScreen = () => {
   //       throw new Error(profileRes.message || "Failed to create profile");
   //     }
 
-  //     const res2 = await fetch("http://172.20.10.4:3000/api/v1/auth/onboarded", {
+  //     const res2 = await fetch("http://192.168.1.10:3000/api/v1/auth/onboarded", {
   //       method: "PATCH",
   //       headers: {
   //         "Content-Type": "application/json",
@@ -67,65 +68,69 @@ const FinalWelcomeScreen = () => {
   //   }
   // };
   const handleStart = async () => {
-  setSubmitting(true);
-  try {
-    const token = await AsyncStorage.getItem("authToken");
-    if (!token) throw new Error("Authentication token missing.");
-
-    const decoded = decodeJWT(token);
-    const userId = decoded?.id || decoded?._id;
-    if (!userId) throw new Error("Invalid token. User ID not found.");
-
-    const formData = createProfileFormData(onboardingData, userId);
-
-    // ✅ Submit profile with FormData
-    const res1 = await fetch("http://172.20.10.4:3000/api/v1/userProfile", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`, // Don't add Content-Type manually
-      },
-      body: formData,
-    });
-
-    // ✅ Read raw response for debugging
-    const rawText = await res1.text();
-    console.log("🧾 Profile API Response Text:", rawText);
-
-    let profileRes;
+    setSubmitting(true);
     try {
-      profileRes = JSON.parse(rawText);
-    } catch (e) {
-      throw new Error("Invalid JSON response from server while creating profile.");
+      const token = await AsyncStorage.getItem("authToken");
+      if (!token) throw new Error("Authentication token missing.");
+
+      const decoded = decodeJWT(token);
+      const userId = decoded?.id || decoded?._id;
+      if (!userId) throw new Error("Invalid token. User ID not found.");
+
+      const formData = createProfileFormData(onboardingData, userId);
+
+      // ✅ Submit profile with FormData
+      const res1 = await fetch(`${API_URL}/api/v1/userProfile`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`, // Don't add Content-Type manually
+        },
+        body: formData,
+      });
+
+      // ✅ Read raw response for debugging
+      const rawText = await res1.text();
+      console.log("🧾 Profile API Response Text:", rawText);
+
+      let profileRes;
+      try {
+        profileRes = JSON.parse(rawText);
+      } catch (e) {
+        throw new Error(
+          "Invalid JSON response from server while creating profile."
+        );
+      }
+
+      if (!profileRes.success) {
+        throw new Error(profileRes.message || "Failed to create profile");
+      }
+
+      // ✅ Patch onboarded status
+      const res2 = await fetch(`${API_URL}/api/v1/auth/onboarded`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ onboarded: true }),
+      });
+
+      const onboardRes = await res2.json();
+      if (!onboardRes.success) {
+        throw new Error(
+          onboardRes.message || "Failed to update onboarded status"
+        );
+      }
+
+      // 🎉 Navigate to home
+      router.replace("/(tabs)/(home)/HomeScreen");
+    } catch (err: any) {
+      console.error("Onboarding Submit Error:", err);
+      Alert.alert("Error", err.message || "Something went wrong");
+    } finally {
+      setSubmitting(false);
     }
-
-    if (!profileRes.success) {
-      throw new Error(profileRes.message || "Failed to create profile");
-    }
-
-    // ✅ Patch onboarded status
-    const res2 = await fetch("http://172.20.10.4:3000/api/v1/auth/onboarded", {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ onboarded: true }),
-    });
-
-    const onboardRes = await res2.json();
-    if (!onboardRes.success) {
-      throw new Error(onboardRes.message || "Failed to update onboarded status");
-    }
-
-    // 🎉 Navigate to home
-    router.replace("/(tabs)/(home)/HomeScreen");
-  } catch (err: any) {
-    console.error("Onboarding Submit Error:", err);
-    Alert.alert("Error", err.message || "Something went wrong");
-  } finally {
-    setSubmitting(false);
-  }
-};
+  };
 
   return (
     <View className="flex-1 bg-primary justify-center items-center px-6">

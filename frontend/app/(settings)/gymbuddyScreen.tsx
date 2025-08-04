@@ -27,6 +27,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Easing } from "react-native";
 import { router } from "expo-router";
 import { decodeJWT } from "@/utils/jwt";
+import { API_URL } from "@env";
 
 type TabType = "requests" | "added" | "blocked";
 
@@ -66,14 +67,13 @@ const GymBuddyScreen = () => {
   const swipeHintOpacity = useRef(new Animated.Value(0)).current;
   const [loading, setLoading] = useState(false);
 
-interface Buddy {
-  id: string; // friendship ID
-  otherUserId: string; // required for backend
-  name: string;
-  image: string;
-  status: string;
-}
-
+  interface Buddy {
+    id: string; // friendship ID
+    otherUserId: string; // required for backend
+    name: string;
+    image: string;
+    status: string;
+  }
 
   const fetchPendingRequests = async () => {
     try {
@@ -87,16 +87,13 @@ interface Buddy {
       const decoded = decodeJWT(token);
       console.log("User ID:", decoded?.id || decoded?._id);
 
-      const response = await fetch(
-        "http://172.20.10.4:3000/api/v1/friends/requests",
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await fetch(`${API_URL}/api/v1/friends/requests`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -109,14 +106,13 @@ interface Buddy {
       console.log("PENDING REQUESTS:", JSON.stringify(result, null, 2));
 
       // Assuming the API returns an array of requests or an object with requests array
-     const requests = result.data.map((req: any) => ({
-  id: req._id, 
-  otherUserId: req.user1._id, // send this to backend
-  name: `${req.user1.firstName} ${req.user1.lastName}`,
-  image: req.user1.imageUrl[0],
-  status: req.status,
-}));
-
+      const requests = result.data.map((req: any) => ({
+        id: req._id,
+        otherUserId: req.user1._id, // send this to backend
+        name: `${req.user1.firstName} ${req.user1.lastName}`,
+        image: req.user1.imageUrl[0],
+        status: req.status,
+      }));
 
       console.log("Transformed Requests:", requests);
 
@@ -135,45 +131,49 @@ interface Buddy {
       setLoading(false);
     }
   };
- const fetchAddedBuddies = async () => {
-  try {
-    const token = await AsyncStorage.getItem("authToken");
-    if (!token) throw new Error("No token found");
+  const fetchAddedBuddies = async () => {
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      if (!token) throw new Error("No token found");
 
-    const decoded = decodeJWT(token);
-    const currentUserId = decoded?.id || decoded?._id;
+      const decoded = decodeJWT(token);
+      const currentUserId = decoded?.id || decoded?._id;
 
-    const response = await fetch("http://172.20.10.4:3000/api/v1/friends/list-friends", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    });
+      const response = await fetch(
+        "http://192.168.1.10:3000/api/v1/friends/list-friends",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-    if (!response.ok) throw new Error(`Failed to fetch friends: ${response.status}`);
-    const result = await response.json();
+      if (!response.ok)
+        throw new Error(`Failed to fetch friends: ${response.status}`);
+      const result = await response.json();
 
-    const transformed = result.data.map((friendship: any) => {
-      const otherUser =
-        friendship.user1._id === currentUserId
-          ? friendship.user2
-          : friendship.user1;
+      const transformed = result.data.map((friendship: any) => {
+        const otherUser =
+          friendship.user1._id === currentUserId
+            ? friendship.user2
+            : friendship.user1;
 
-      return {
-        id: friendship._id,
-        otherUserId: otherUser._id,
-        name: `${otherUser.firstName} ${otherUser.lastName}`,
-        image: otherUser.imageUrl[0],
-        status: friendship.status,
-      };
-    });
+        return {
+          id: friendship._id,
+          otherUserId: otherUser._id,
+          name: `${otherUser.firstName} ${otherUser.lastName}`,
+          image: otherUser.imageUrl[0],
+          status: friendship.status,
+        };
+      });
 
-    setBuddies((prev) => ({ ...prev, added: transformed }));
-  } catch (error) {
-    console.error("Error fetching added buddies:", error);
-  }
-};
+      setBuddies((prev) => ({ ...prev, added: transformed }));
+    } catch (error) {
+      console.error("Error fetching added buddies:", error);
+    }
+  };
 
   const fetchBlockedBuddies = async () => {
     const response = await fetch(
@@ -203,55 +203,48 @@ interface Buddy {
     fetchAll();
   }, []);
 
-const updateRequestStatus = async (
-  otherUserId: string,
-  status: "accepted" | "rejected"
-) => {
-  try {
-    const token = await AsyncStorage.getItem("authToken");
-    if (!token) throw new Error("No token found");
+  const updateRequestStatus = async (
+    otherUserId: string,
+    status: "accepted" | "rejected"
+  ) => {
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      if (!token) throw new Error("No token found");
 
-    const endpoint =
-      status === "accepted"
-        ? "accept-request"
-        : "delete-friendship"; // assuming rejection = delete
+      const endpoint =
+        status === "accepted" ? "accept-request" : "delete-friendship"; // assuming rejection = delete
 
-    const response = await fetch(
-      `http://172.20.10.4:3000/api/v1/friends/${endpoint}`,
-      {
+      const response = await fetch(`${API_URL}/api/v1/friends/${endpoint}`, {
         method: "PATCH", // or DELETE for rejection if backend requires
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ otherUserId }),
-      }
-    );
+      });
 
-    if (!response.ok)
-      throw new Error(`Failed to update request: ${response.status}`);
+      if (!response.ok)
+        throw new Error(`Failed to update request: ${response.status}`);
 
-    // Update state locally
-    setBuddies((prev) => {
-      const updatedRequests = prev.requests.filter(
-        (req) => req.otherUserId !== otherUserId
-      );
-      const updatedBuddies =
-        status === "accepted"
-          ? [
-              ...prev.added,
-              prev.requests.find((req) => req.otherUserId === otherUserId)!,
-            ]
-          : prev.added;
+      // Update state locally
+      setBuddies((prev) => {
+        const updatedRequests = prev.requests.filter(
+          (req) => req.otherUserId !== otherUserId
+        );
+        const updatedBuddies =
+          status === "accepted"
+            ? [
+                ...prev.added,
+                prev.requests.find((req) => req.otherUserId === otherUserId)!,
+              ]
+            : prev.added;
 
-      return { ...prev, requests: updatedRequests, added: updatedBuddies };
-    });
-  } catch (error) {
-    console.error("Error updating request:", error);
-  }
-};
-
-
+        return { ...prev, requests: updatedRequests, added: updatedBuddies };
+      });
+    } catch (error) {
+      console.error("Error updating request:", error);
+    }
+  };
 
   const resetSwipeHint = async () => {
     try {
@@ -375,47 +368,44 @@ const updateRequestStatus = async (
     });
   }, [slideAnim, height]);
 
-  const BuddyCard = ({
-  item,
-}: {
-  item: Buddy;
-}) => {
-  return (
-    <View className="bg-zinc-800 p-4 rounded-xl mb-4">
-      {/* Top Section: Image + Name */}
-      <View className="flex-row items-center">
-        <Image
-          source={{ uri: item.image }}
-          className="w-12 h-12 rounded-full mr-4"
-        />
-        <View>
-          <Text className="text-white text-lg font-semibold">{item.name}</Text>
-          <Text className="text-zinc-400 text-sm">{item.status}</Text>
+  const BuddyCard = ({ item }: { item: Buddy }) => {
+    return (
+      <View className="bg-zinc-800 p-4 rounded-xl mb-4">
+        {/* Top Section: Image + Name */}
+        <View className="flex-row items-center">
+          <Image
+            source={{ uri: item.image }}
+            className="w-12 h-12 rounded-full mr-4"
+          />
+          <View>
+            <Text className="text-white text-lg font-semibold">
+              {item.name}
+            </Text>
+            <Text className="text-zinc-400 text-sm">{item.status}</Text>
+          </View>
         </View>
+
+        {/* Show Accept/Reject buttons only for pending requests */}
+        {item.status === "pending" && (
+          <View className="flex-row mt-3">
+            <TouchableOpacity
+              className="flex-1 bg-green-600/20 border border-green-500/30 rounded-lg p-2 mr-2 items-center"
+              onPress={() => updateRequestStatus(item.otherUserId, "accepted")}
+            >
+              <Text className="text-green-400 font-medium">Accept</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="flex-1 bg-red-600/20 border border-red-500/30 rounded-lg p-2 items-center"
+              onPress={() => updateRequestStatus(item.otherUserId, "rejected")}
+            >
+              <Text className="text-red-400 font-medium">Reject</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
-
-      {/* Show Accept/Reject buttons only for pending requests */}
-      {item.status === "pending" && (
-        <View className="flex-row mt-3">
-          <TouchableOpacity
-            className="flex-1 bg-green-600/20 border border-green-500/30 rounded-lg p-2 mr-2 items-center"
-            onPress={() => updateRequestStatus(item.otherUserId, "accepted")}
-          >
-            <Text className="text-green-400 font-medium">Accept</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            className="flex-1 bg-red-600/20 border border-red-500/30 rounded-lg p-2 items-center"
-            onPress={() => updateRequestStatus(item.otherUserId, "rejected")}
-          >
-            <Text className="text-red-400 font-medium">Reject</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
-};
-
+    );
+  };
 
   const EmptyState = () => {
     let icon, title, message;
@@ -542,11 +532,7 @@ const updateRequestStatus = async (
                 : buddies.blocked
             }
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <BuddyCard
-                item={item}
-              />
-            )}
+            renderItem={({ item }) => <BuddyCard item={item} />}
             className="px-4"
             contentContainerClassName="pb-8"
             showsVerticalScrollIndicator={false}

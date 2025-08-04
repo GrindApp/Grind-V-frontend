@@ -5,6 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { decodeJWT } from "@/utils/jwt";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { API_URL } from '@env';
 
 export default function FriendList() {
   const [chats, setChats] = useState<any[]>([]);
@@ -21,7 +22,7 @@ export default function FriendList() {
         setCurrentUserId(decoded?.id);
 
         const response = await axios.get(
-          "http://172.20.10.4:3000/api/v1/friends/list-friends",
+          `${API_URL}/api/v1/friends/list-friends`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
 

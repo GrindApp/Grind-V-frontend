@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';import { Ionicons } from '@expo/vector-icons';
 import { useOnboarding } from '@/context/OnboardingContext';
+import { API_URL } from '@env';
 
 type Interest = {
   _id: string;
@@ -30,7 +31,7 @@ const { onboardingData, updateOnboardingData } = useOnboarding();
   useEffect(() => {
     const fetchInterests = async () => {
       try {
-        const res = await fetch('http://172.20.10.4:3000/api/v1/interests');
+        const res = await fetch( `${API_URL}/api/v1/interests`);
         const result = await res.json();
 
         if (result.success && Array.isArray(result.data)) {

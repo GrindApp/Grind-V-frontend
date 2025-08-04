@@ -1,22 +1,23 @@
 import { useEffect, useState, useRef } from "react";
-import { 
-  View, 
-  Text, 
-  FlatList, 
-  TextInput, 
-  TouchableOpacity, 
-  KeyboardAvoidingView, 
+import {
+  View,
+  Text,
+  FlatList,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
   Platform,
   Dimensions,
-  Image
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { decodeJWT } from "@/utils/jwt";
+import { API_URL } from "@env";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 export default function ChatPage() {
   const { id: friendshipId } = useLocalSearchParams();
@@ -38,13 +39,13 @@ export default function ChatPage() {
         // Get the actual user ID from JWT token (this should be unique per user)
         const decoded: any = decodeJWT(token);
         const userId = decoded?.id;
-        
+
         console.log("Current user JWT ID:", userId);
         setCurrentUserId(userId);
 
         // Get friendship details using the same endpoint as FriendList
         const friendshipResponse = await axios.get(
-          "http://172.20.10.4:3000/api/v1/friends/list-friends",
+          `${API_URL}/api/v1/friends/list-friends`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
@@ -55,22 +56,31 @@ export default function ChatPage() {
 
         if (friendship) {
           // Determine the other user using the same logic as FriendList
-          const otherUserData = friendship.user1.user === userId ? friendship.user2 : friendship.user1;
+          const otherUserData =
+            friendship.user1.user === userId
+              ? friendship.user2
+              : friendship.user1;
           setOtherUser(otherUserData);
         }
 
         // Fetch messages
         const response = await axios.get(
-          `http://172.20.10.4:3000/api/v1/messages/${friendshipId}`,
+          `http://192.168.1.10:3000/api/v1/messages/${friendshipId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
-        console.log("Message senders:", response.data.map(msg => msg.sender));
-        console.log("Current user matches:", response.data.map(msg => ({
-          text: msg.text,
-          sender: msg.sender,
-          isMe: msg.sender === userId
-        })));
+        console.log(
+          "Message senders:",
+          response.data.map((msg) => msg.sender)
+        );
+        console.log(
+          "Current user matches:",
+          response.data.map((msg) => ({
+            text: msg.text,
+            sender: msg.sender,
+            isMe: msg.sender === userId,
+          }))
+        );
 
         setMessages(response.data);
       } catch (error) {
@@ -91,7 +101,7 @@ export default function ChatPage() {
         if (!token) return;
 
         const response = await axios.get(
-          `http://172.20.10.4:3000/api/v1/messages/${friendshipId}`,
+          `http://192.168.1.10:3000/api/v1/messages/${friendshipId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
@@ -132,7 +142,7 @@ export default function ChatPage() {
       if (!token) throw new Error("Token not found");
 
       const response = await axios.post(
-        "http://172.20.10.4:3000/api/v1/messages",
+        "http://192.168.1.10:3000/api/v1/messages",
         { friendshipId, text: messageText },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -154,16 +164,16 @@ export default function ChatPage() {
   // Format time
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: false 
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
     });
   };
 
   // Helper function to normalize user ID for comparison
   const normalizeUserId = (id: any): string => {
-    if (typeof id === 'object' && id !== null) {
+    if (typeof id === "object" && id !== null) {
       return id._id || id.id || String(id);
     }
     return String(id);
@@ -175,64 +185,71 @@ export default function ChatPage() {
     const messageSenderId = normalizeUserId(item.sender);
     const userId = normalizeUserId(currentUserId);
     const isMe = messageSenderId === userId;
-    
+
     // Debug logging
     console.log(`Message ${index}: "${item.text}"`);
     console.log(`  Raw sender:`, item.sender);
     console.log(`  Normalized sender: "${messageSenderId}"`);
     console.log(`  Normalized user: "${userId}"`);
     console.log(`  Is mine: ${isMe}`);
-    console.log('---');
+    console.log("---");
 
     const prevMessage = index > 0 ? messages[index - 1] : null;
-    const showTime = !prevMessage || 
-      (new Date(item.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() > 300000); // 5 minutes
+    const showTime =
+      !prevMessage ||
+      new Date(item.createdAt).getTime() -
+        new Date(prevMessage.createdAt).getTime() >
+        300000; // 5 minutes
 
     return (
       <View style={{ marginBottom: 4 }}>
         {showTime && (
-          <View style={{ alignItems: 'center', marginVertical: 8 }}>
-            <Text style={{ 
-              color: '#888', 
-              fontSize: 12,
-              backgroundColor: '#2A2A2A',
-              paddingHorizontal: 12,
-              paddingVertical: 4,
-              borderRadius: 12
-            }}>
+          <View style={{ alignItems: "center", marginVertical: 8 }}>
+            <Text
+              style={{
+                color: "#888",
+                fontSize: 12,
+                backgroundColor: "#2A2A2A",
+                paddingHorizontal: 12,
+                paddingVertical: 4,
+                borderRadius: 12,
+              }}
+            >
               {formatTime(item.createdAt)}
             </Text>
           </View>
         )}
-        
+
         {/* Debug indicator */}
-        <View style={{ alignItems: 'center', marginBottom: 2 }}>
-          <Text style={{ 
-            color: isMe ? '#00FF00' : '#FF0000', 
-            fontSize: 10,
-            opacity: 0.7
-          }}>
-            {isMe ? 'ME' : 'THEM'} ({messageSenderId})
+        <View style={{ alignItems: "center", marginBottom: 2 }}>
+          <Text
+            style={{
+              color: isMe ? "#00FF00" : "#FF0000",
+              fontSize: 10,
+              opacity: 0.7,
+            }}
+          >
+            {isMe ? "ME" : "THEM"} ({messageSenderId})
           </Text>
         </View>
-        
+
         <View
           style={{
-            flexDirection: 'row',
-            justifyContent: isMe ? 'flex-end' : 'flex-start',
+            flexDirection: "row",
+            justifyContent: isMe ? "flex-end" : "flex-start",
             marginHorizontal: 12,
           }}
         >
           <View
             style={{
-              backgroundColor: isMe ? '#007AFF' : '#3A3A3C',
+              backgroundColor: isMe ? "#007AFF" : "#3A3A3C",
               paddingHorizontal: 16,
               paddingVertical: 10,
               borderRadius: 20,
               maxWidth: width * 0.75,
               borderBottomRightRadius: isMe ? 4 : 20,
               borderBottomLeftRadius: isMe ? 20 : 4,
-              shadowColor: '#000',
+              shadowColor: "#000",
               shadowOffset: {
                 width: 0,
                 height: 1,
@@ -242,11 +259,11 @@ export default function ChatPage() {
               elevation: 3,
             }}
           >
-            <Text 
-              style={{ 
-                color: 'white', 
+            <Text
+              style={{
+                color: "white",
                 fontSize: 16,
-                lineHeight: 20
+                lineHeight: 20,
               }}
             >
               {item.text}
@@ -260,13 +277,15 @@ export default function ChatPage() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#000000" }}>
       {/* Debug info at top */}
-      <View style={{ 
-        backgroundColor: '#FF0000', 
-        padding: 8, 
-        alignItems: 'center' 
-      }}>
-        <Text style={{ color: 'white', fontSize: 12 }}>
-          Current User ID: {currentUserId || 'Loading...'}
+      <View
+        style={{
+          backgroundColor: "#FF0000",
+          padding: 8,
+          alignItems: "center",
+        }}
+      >
+        <Text style={{ color: "white", fontSize: 12 }}>
+          Current User ID: {currentUserId || "Loading..."}
         </Text>
       </View>
 
@@ -314,7 +333,9 @@ export default function ChatPage() {
               fontWeight: "600",
             }}
           >
-            {otherUser ? `${otherUser.firstName} ${otherUser.lastName}` : "Loading..."}
+            {otherUser
+              ? `${otherUser.firstName} ${otherUser.lastName}`
+              : "Loading..."}
           </Text>
           <Text
             style={{
@@ -328,23 +349,27 @@ export default function ChatPage() {
         </View>
       </View>
 
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
       >
         <FlatList
           ref={flatListRef}
           data={messages}
-          keyExtractor={(item) => item._id || item.id || Math.random().toString()}
+          keyExtractor={(item) =>
+            item._id || item.id || Math.random().toString()
+          }
           renderItem={renderMessage}
-          contentContainerStyle={{ 
+          contentContainerStyle={{
             paddingVertical: 10,
             flexGrow: 1,
-            justifyContent: 'flex-end'
+            justifyContent: "flex-end",
           }}
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          onContentSizeChange={() =>
+            flatListRef.current?.scrollToEnd({ animated: false })
+          }
         />
 
         {/* Input Box */}
@@ -385,12 +410,13 @@ export default function ChatPage() {
               textAlignVertical="center"
             />
           </View>
-          
+
           <TouchableOpacity
             onPress={sendMessage}
             disabled={!text.trim() || isLoading}
             style={{
-              backgroundColor: (!text.trim() || isLoading) ? "#1C1C1E" : "#007AFF",
+              backgroundColor:
+                !text.trim() || isLoading ? "#1C1C1E" : "#007AFF",
               width: 36,
               height: 36,
               borderRadius: 18,
@@ -398,11 +424,11 @@ export default function ChatPage() {
               alignItems: "center",
             }}
           >
-            <Text 
-              style={{ 
-                color: (!text.trim() || isLoading) ? "#8E8E93" : "white", 
+            <Text
+              style={{
+                color: !text.trim() || isLoading ? "#8E8E93" : "white",
                 fontSize: 16,
-                fontWeight: "600"
+                fontWeight: "600",
               }}
             >
               ↑

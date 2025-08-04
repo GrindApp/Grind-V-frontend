@@ -15,6 +15,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { decodeJWT } from "@/utils/jwt";
+import { API_URL } from "@env";
 
 const EditProfileScreen = () => {
   const router = useRouter();
@@ -43,11 +44,11 @@ const EditProfileScreen = () => {
         if (!userId) throw new Error("User ID not found");
 
         const [profileRes, userRes] = await Promise.all([
-          fetch(`http://172.20.10.4:3000/api/v1/userProfile/user/${userId}`, {
+          fetch(`${API_URL}/api/v1/userProfile/user/${userId}`, {
             method: "GET",
             headers: { Authorization: `Bearer ${token}` },
           }),
-          fetch(`http://172.20.10.4:3000/api/v1/user/${userId}`, {
+          fetch(`${API_URL}/api/v1/user/${userId}`, {
             method: "GET",
             headers: { Authorization: `Bearer ${token}` },
           }),
@@ -56,8 +57,10 @@ const EditProfileScreen = () => {
         const profileJson = await profileRes.json();
         const userJson = await userRes.json();
 
-        if (!profileJson.success) throw new Error(profileJson.message || "Failed to load profile");
-        if (!userJson.success) throw new Error(userJson.message || "Failed to load user");
+        if (!profileJson.success)
+          throw new Error(profileJson.message || "Failed to load profile");
+        if (!userJson.success)
+          throw new Error(userJson.message || "Failed to load user");
 
         const userProfile = profileJson.data;
         const userAccount = userJson.data;
@@ -107,38 +110,40 @@ const EditProfileScreen = () => {
   };
 
   const handleSaveChanges = async () => {
-  try {
-    setLoading(true);
-    const token = await AsyncStorage.getItem("authToken");
-    if (!token) throw new Error("Token not found");
-    if (!profileId) throw new Error("Profile ID not found");
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem("authToken");
+      if (!token) throw new Error("Token not found");
+      if (!profileId) throw new Error("Profile ID not found");
 
-    const body = {
-      bio: formDataState.bio,
-      imageUrl: [profileImage, grindImage].filter(Boolean), // optional
-    };
+      const body = {
+        bio: formDataState.bio,
+        imageUrl: [profileImage, grindImage].filter(Boolean), // optional
+      };
 
-    const res = await fetch(`http://172.20.10.4:3000/api/v1/userProfile/user/${profileId}`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json", // ✅ Important for JSON
-      },
-      body: JSON.stringify(body),
-    });
+      const res = await fetch(
+        `${API_URL}/api/v1/userProfile/user/${profileId}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json", // ✅ Important for JSON
+          },
+          body: JSON.stringify(body),
+        }
+      );
 
-    const json = await res.json();
-    if (!json.success) throw new Error(json.message || "Update failed");
+      const json = await res.json();
+      if (!json.success) throw new Error(json.message || "Update failed");
 
-    Alert.alert("Success", "Profile updated successfully!");
-  } catch (err: any) {
-    console.error("Update error:", err);
-    Alert.alert("Error", err.message || "Failed to update profile");
-  } finally {
-    setLoading(false);
-  }
-};
-
+      Alert.alert("Success", "Profile updated successfully!");
+    } catch (err: any) {
+      console.error("Update error:", err);
+      Alert.alert("Error", err.message || "Failed to update profile");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -166,14 +171,23 @@ const EditProfileScreen = () => {
 
         {/* Images */}
         <View className="flex-row justify-around mb-10">
-          {[{ label: "Profile", image: profileImage, type: "profile" }, { label: "Grind", image: grindImage, type: "grind" }].map(({ label, image, type }) => (
+          {[
+            { label: "Profile", image: profileImage, type: "profile" },
+            { label: "Grind", image: grindImage, type: "grind" },
+          ].map(({ label, image, type }) => (
             <View key={type} className="items-center">
               <View className="relative mb-3">
                 <View className="w-32 h-32 rounded-full overflow-hidden border-2 border-accent">
                   {image ? (
-                    <Image source={{ uri: image }} className="w-full h-full" resizeMode="cover" />
+                    <Image
+                      source={{ uri: image }}
+                      className="w-full h-full"
+                      resizeMode="cover"
+                    />
                   ) : (
-                    <Text className="text-white text-xs text-center mt-12">No Image</Text>
+                    <Text className="text-white text-xs text-center mt-12">
+                      No Image
+                    </Text>
                   )}
                 </View>
                 <TouchableOpacity

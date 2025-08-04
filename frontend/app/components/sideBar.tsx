@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import useLogout from "../(auth)/logout";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
+import { API_URL } from "@env";
 
 type SidebarProps = {
   onClose: () => void;
@@ -28,32 +28,32 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
 
   const [pendingCount, setPendingCount] = useState(0);
 
-const fetchPendingCount = async () => {
-  try {
-    const token = await AsyncStorage.getItem("authToken");
-    if (!token) throw new Error("No token found");
+  const fetchPendingCount = async () => {
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      if (!token) throw new Error("No token found");
 
-    const response = await fetch("http://172.20.10.4:3000/api/v1/friends/requests", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    });
+      const response = await fetch(`${API_URL}/api/v1/friends/requests`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-    if (!response.ok) throw new Error(`Failed to fetch requests: ${response.status}`);
+      if (!response.ok)
+        throw new Error(`Failed to fetch requests: ${response.status}`);
 
-    const result = await response.json();
-    setPendingCount(result.data.length); // assuming `data` is an array of requests
-  } catch (error) {
-    console.error("Error fetching pending requests count:", error);
-  }
-};
+      const result = await response.json();
+      setPendingCount(result.data.length); // assuming `data` is an array of requests
+    } catch (error) {
+      console.error("Error fetching pending requests count:", error);
+    }
+  };
 
-useEffect(() => {
-  fetchPendingCount();
-}, []);
-
+  useEffect(() => {
+    fetchPendingCount();
+  }, []);
 
   const handleLogout = () => {
     // Implement your logout logic here
@@ -68,32 +68,34 @@ useEffect(() => {
       title: "My Profile",
       onPress: () => router.push("/(settings)/EditProfileScreen"),
     },
-     {
-    icon: (
-      <View>
-        <Ionicons name="people-outline" size={24} color="#E0E0E0" />
-        {pendingCount > 0 && (
-          <View
-            style={{
-              position: "absolute",
-              top: -4,
-              right: -4,
-              backgroundColor: "red",
-              borderRadius: 10,
-              paddingHorizontal: 4,
-              paddingVertical: 1,
-            }}
-          >
-            <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>
-              {pendingCount}
-            </Text>
-          </View>
-        )}
-      </View>
-    ),
-    title: "Gym Buddies",
-    onPress: () => router.push("/(settings)/gymbuddyScreen"),
-  },
+    {
+      icon: (
+        <View>
+          <Ionicons name="people-outline" size={24} color="#E0E0E0" />
+          {pendingCount > 0 && (
+            <View
+              style={{
+                position: "absolute",
+                top: -4,
+                right: -4,
+                backgroundColor: "red",
+                borderRadius: 10,
+                paddingHorizontal: 4,
+                paddingVertical: 1,
+              }}
+            >
+              <Text
+                style={{ color: "white", fontSize: 10, fontWeight: "bold" }}
+              >
+                {pendingCount}
+              </Text>
+            </View>
+          )}
+        </View>
+      ),
+      title: "Gym Buddies",
+      onPress: () => router.push("/(settings)/gymbuddyScreen"),
+    },
     {
       icon: <Ionicons name="bookmark-outline" size={24} color="#E0E0E0" />,
       title: "My OG Collection",

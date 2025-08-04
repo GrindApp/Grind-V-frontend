@@ -4,6 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Text } from "react-native";
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
+import { API_URL } from '@env';
 
 export default function Index() {
    const router = useRouter();
@@ -15,7 +16,7 @@ export default function Index() {
       return router.replace("/login");
     }
 
-    const res = await fetch("http://172.20.10.4:3000/api/v1/auth/me", {
+    const res = await fetch(`${API_URL}/api/v1/auth/me`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,

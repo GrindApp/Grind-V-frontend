@@ -13,6 +13,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { decodeJWT } from "@/utils/jwt";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
+import { API_URL } from "@env";
 
 const { width } = Dimensions.get("window");
 
@@ -48,7 +49,7 @@ const GymBuddyScreen = () => {
         console.log("User ID:", decoded?.id || decoded?._id);
 
         const response = await fetch(
-          "http://172.20.10.4:3000/api/v1/user-profile?page=1&limit=10",
+          `${API_URL}/api/v1/user-profile?page=1&limit=10`,
           {
             method: "GET",
             headers: {
@@ -100,21 +101,20 @@ const GymBuddyScreen = () => {
     if (!swipedUser) return;
 
     console.log("Swiped user:", {
-  id: swipedUser.id,
-  user: swipedUser.user,
-  fullObject: swipedUser
-});
+      id: swipedUser.id,
+      user: swipedUser.user,
+      fullObject: swipedUser,
+    });
 
-// Also log what you're sending to each API
-console.log("Sending to swipe API:", {
-  
-  swipedId: swipedUser.id,
-  direction,
-});
+    // Also log what you're sending to each API
+    console.log("Sending to swipe API:", {
+      swipedId: swipedUser.id,
+      direction,
+    });
 
-console.log("Sending to friend request API:", {
-  toUserId: swipedUser.user,
-});
+    console.log("Sending to friend request API:", {
+      toUserId: swipedUser.user,
+    });
 
     try {
       const token = await AsyncStorage.getItem("authToken");
@@ -124,21 +124,18 @@ console.log("Sending to friend request API:", {
       const swiperId = decoded?.id || decoded?._id;
 
       // Save the swipe
-      const swipeResponse = await fetch(
-        "http://172.20.10.4:3000/api/v1/swipeUser/swipes",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            swiperId,
-            swipedId: swipedUser.id,
-            direction,
-          }),
-        }
-      );
+      const swipeResponse = await fetch(`${API_URL}/api/v1/swipeUser/swipes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          swiperId,
+          swipedId: swipedUser.id,
+          direction,
+        }),
+      });
 
       if (!swipeResponse.ok) {
         console.error("Failed to save swipe");
@@ -147,7 +144,7 @@ console.log("Sending to friend request API:", {
       // If swiped right, send friend request
       if (direction === "right") {
         const friendRequestResponse = await fetch(
-          "http://172.20.10.4:3000/api/v1/friends/send-request",
+          "http://192.168.1.10:3000/api/v1/friends/send-request",
           {
             method: "POST",
             headers: {
@@ -155,7 +152,8 @@ console.log("Sending to friend request API:", {
               Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({
- receiverId: swipedUser.id,             }),
+              receiverId: swipedUser.id,
+            }),
           }
         );
 
@@ -194,7 +192,7 @@ console.log("Sending to friend request API:", {
   //     const swiperId = decoded?.id || decoded?._id;
 
   //     const response = await fetch(
-  //       "http://172.20.10.4:3000/api/v1/swipeUser/swipes",
+  //       "http://192.168.1.10:3000/api/v1/swipeUser/swipes",
   //       {
   //         method: "POST",
   //         headers: {

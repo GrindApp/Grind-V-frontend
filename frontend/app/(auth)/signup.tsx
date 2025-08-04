@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useForm, Controller } from "react-hook-form";
 import { useRouter } from "expo-router";
+import { API_URL } from '@env';
 
 type FormData = {
   username: string;
@@ -40,7 +41,7 @@ const SignUp = () => {
     }
 
     try {
-      const res = await fetch("http://172.20.10.4:3000/api/v1/auth/register", {
+      const res = await fetch(`${API_URL}/api/v1/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
