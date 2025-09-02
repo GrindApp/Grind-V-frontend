@@ -11,7 +11,8 @@ import {
   Alert,
 } from 'react-native';import { Ionicons } from '@expo/vector-icons';
 import { useOnboarding } from '@/context/OnboardingContext';
-import { API_URL } from '@env';
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
 
 type Interest = {
   _id: string;
