@@ -10,7 +10,8 @@ import {
 } from "react-native";
 import { useForm, Controller } from "react-hook-form";
 import { useRouter } from "expo-router";
-import { API_URL } from '@env';
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
 
 type FormData = {
   username: string;

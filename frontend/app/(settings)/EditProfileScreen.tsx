@@ -15,7 +15,8 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { decodeJWT } from "@/utils/jwt";
-import { API_URL } from "@env";
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
 
 const EditProfileScreen = () => {
   const router = useRouter();
@@ -74,7 +75,7 @@ const EditProfileScreen = () => {
 
         setProfileImage(userProfile.imageUrl?.[0] || "");
         setGrindImage(userProfile.imageUrl?.[1] || "");
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to load profile:", err);
         Alert.alert("Error", err.message || "Failed to load profile");
       } finally {

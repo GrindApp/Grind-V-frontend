@@ -13,7 +13,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { decodeJWT } from "@/utils/jwt";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-import { API_URL } from "@env";
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
 
 const { width } = Dimensions.get("window");
 
@@ -285,8 +286,8 @@ const GymBuddyScreen = () => {
           ref={swiperRef}
           cards={gymBuddies}
           renderCard={renderCard}
-          onSwipedLeft={(cardIndex) => handleSwipe(cardIndex, "left")}
-          onSwipedRight={(cardIndex) => handleSwipe(cardIndex, "right")}
+          onSwipedLeft={(cardIndex: number) => handleSwipe(cardIndex, "left")}
+          onSwipedRight={(cardIndex: number) => handleSwipe(cardIndex, "right")}
           cardIndex={index}
           backgroundColor="transparent"
           stackSize={3}

@@ -14,7 +14,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import useLogout from "../(auth)/logout";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { API_URL } from "@env";
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
 
 type SidebarProps = {
   onClose: () => void;

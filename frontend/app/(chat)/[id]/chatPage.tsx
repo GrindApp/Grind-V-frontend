@@ -15,7 +15,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { decodeJWT } from "@/utils/jwt";
-import { API_URL } from "@env";
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
 
 const { width } = Dimensions.get("window");
 
@@ -71,11 +72,11 @@ export default function ChatPage() {
 
         console.log(
           "Message senders:",
-          response.data.map((msg) => msg.sender)
+          response.data.map((msg: any) => msg.sender)
         );
         console.log(
           "Current user matches:",
-          response.data.map((msg) => ({
+          response.data.map((msg: any) => ({
             text: msg.text,
             sender: msg.sender,
             isMe: msg.sender === userId,

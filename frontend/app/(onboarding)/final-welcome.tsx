@@ -11,7 +11,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useOnboarding } from "@/context/OnboardingContext";
 import { decodeJWT } from "@/utils/jwt";
 import { createProfileFormData } from "@/utils/createProfileFormData";
-import { API_URL } from "@env";
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
 
 const FinalWelcomeScreen = () => {
   const router = useRouter();

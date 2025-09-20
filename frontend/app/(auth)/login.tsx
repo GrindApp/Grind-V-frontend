@@ -15,7 +15,9 @@ import FontAwesome from "react-native-vector-icons/FontAwesome";
 import { Link } from "expo-router";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { API_URL } from '@env';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -25,6 +27,7 @@ const Login = () => {
 
   const handleLogin = async () => {
     console.log(email,password)
+    console.log(API_URL)
     if (!email || !password) {
       Alert.alert("Error", "Email and password are required");
       return;

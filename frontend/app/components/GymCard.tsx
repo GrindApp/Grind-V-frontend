@@ -18,6 +18,7 @@ type GymCardProps = {
   priceCategory?: string;
   tags?: string[];
   isFavorite?: boolean;
+  amenities?: string[];
   onPress?: () => void;
   onFavoritePress?: () => void;
 };
@@ -35,7 +36,7 @@ const GymCard = ({
   onPress,
   onFavoritePress,
 }: GymCardProps) => {
-  console.log("GymItem jjj");
+  console.log("GymItem jjjjj");
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [favorite, setFavorite] = useState(isFavorite);
@@ -171,7 +172,7 @@ const GymCard = ({
 
         {/* Features & Amenities */}
         <View className="flex-row mt-4 justify-between">
-          {amenities.map((amenity) => (
+          {amenities?.map((amenity) => (
             <View className="flex-row items-center" key={amenity}>
               <View className="w-8 h-8 bg-[#333336] rounded-full items-center justify-center">
                 <Ionicons name="barbell-outline" size={16} color="#fff" />

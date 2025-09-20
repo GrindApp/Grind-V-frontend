@@ -5,7 +5,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { decodeJWT } from "@/utils/jwt";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { API_URL } from '@env';
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
 
 export default function FriendList() {
   const [chats, setChats] = useState<any[]>([]);

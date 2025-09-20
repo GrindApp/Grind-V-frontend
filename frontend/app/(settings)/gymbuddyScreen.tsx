@@ -10,6 +10,7 @@ import {
   Modal,
   Dimensions,
   TouchableWithoutFeedback,
+  Alert,
 } from "react-native";
 import {
   Ionicons,
@@ -27,7 +28,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Easing } from "react-native";
 import { router } from "expo-router";
 import { decodeJWT } from "@/utils/jwt";
-import { API_URL } from "@env";
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
 
 type TabType = "requests" | "added" | "blocked";
 
@@ -120,7 +122,7 @@ const GymBuddyScreen = () => {
         ...prev,
         requests,
       }));
-    } catch (error) {
+    } catch (error: Error | any) {
       console.error("Error fetching pending requests:", error);
       Alert.alert(
         "Error",
