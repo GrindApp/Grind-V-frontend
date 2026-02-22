@@ -14,7 +14,7 @@ const EmailScreen = ({ navigation }: { navigation: NavigationProp<any> }) => {
   };
 
   return (
-    <View className="flex-1 bg-black px-6 justify-center">
+    <View className="flex-1 bg-primary px-6 justify-center">
       <Text className="text-white text-2xl font-bold mb-4">What's your email?</Text>
       <TextInput
         value={email}
