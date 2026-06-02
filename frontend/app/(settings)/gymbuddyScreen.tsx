@@ -17,10 +17,11 @@ import {
   MaterialCommunityIcons,
   MaterialIcons,
 } from "@expo/vector-icons";
-import {
-  Swipeable,
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
+// import {
+//   Swipeable,
+//   GestureHandlerRootView,
+// } from "react-native-gesture-handler";
+
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -485,7 +486,7 @@ const GymBuddyScreen = () => {
         colors={["#18181b", "#09090b"]}
         className="absolute inset-0"
       />
-      <GestureHandlerRootView className="flex-1">
+      <View className="flex-1">
         <View className="px-4 pt-2">
           <View className="flex-row items-center mb-6 space-x-4">
             <TouchableOpacity
@@ -663,7 +664,7 @@ const GymBuddyScreen = () => {
             </View>
           </TouchableWithoutFeedback>
         </Modal>
-      </GestureHandlerRootView>
+      </View>
     </SafeAreaView>
   );
 };

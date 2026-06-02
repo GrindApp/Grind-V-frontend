@@ -6,8 +6,7 @@ module.exports = function (api) {
       "nativewind/babel",
     ],
     plugins: [
-      // Remove react-native-dotenv since we're using EXPOPUBLIC env vars
-      ["react-native-reanimated/plugin"],
+      "react-native-worklets/plugin", // this is all you need now
     ],
   };
 };
