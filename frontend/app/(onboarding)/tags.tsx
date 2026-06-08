@@ -11,6 +11,8 @@ import {
   Alert,
 } from 'react-native';import { Ionicons } from '@expo/vector-icons';
 import { useOnboarding } from '@/context/OnboardingContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 
@@ -28,6 +30,8 @@ const { onboardingData, updateOnboardingData } = useOnboarding();
   const [interests, setInterests] = useState<Interest[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+    const insets = useSafeAreaInsets();
+  
 
   useEffect(() => {
     const fetchInterests = async () => {
@@ -80,8 +84,10 @@ const { onboardingData, updateOnboardingData } = useOnboarding();
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-primary">
-      <StatusBar barStyle="light-content" />
+    
+      <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}
+      className="bg-primary">
+<StatusBar barStyle="light-content" />
       
       <View className="flex-1 px-6 py-6">
         {/* Back Button */}
@@ -195,7 +201,9 @@ const { onboardingData, updateOnboardingData } = useOnboarding();
           </Text>
         </View>
       </View>
-    </SafeAreaView>
+      </View>
+      
+    
   );
 };
 

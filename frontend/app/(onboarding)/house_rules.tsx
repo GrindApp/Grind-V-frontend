@@ -1,11 +1,13 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StatusBar } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 const HouseRulesScreen = () => {
   const router = useRouter();
   const [accepted, setAccepted] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const handleContinue = () => {
     if (accepted) {
@@ -16,7 +18,11 @@ const HouseRulesScreen = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-primary">
+    <View
+      style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}
+      className="bg-primary"
+    >
+      <StatusBar barStyle="light-content" />
       <ScrollView className="flex-1">
         <View className="px-6 py-8">
           {/* Header */}
@@ -31,7 +37,6 @@ const HouseRulesScreen = () => {
           {/* Rules Card */}
           <View className="bg-gray-800 rounded-2xl p-6 mb-8">
             <Text className="text-white text-xl font-bold mb-4">House Rules</Text>
-            
             {[
               'Respect all members at all times.',
               'No spam or self-promotion.',
@@ -50,7 +55,7 @@ const HouseRulesScreen = () => {
       </ScrollView>
 
       {/* Fixed Bottom Action Area */}
-      <View className="bg-primary px-6 py-6 ">
+      <View className="bg-primary px-6 pt-4" style={{ paddingBottom: Math.max(insets.bottom, 16) }}>
         <TouchableOpacity
           className={`flex-row items-center mb-6 ${accepted ? 'opacity-100' : 'opacity-80'}`}
           onPress={() => setAccepted(!accepted)}
@@ -58,9 +63,7 @@ const HouseRulesScreen = () => {
           <View className={`w-6 h-6 rounded mr-3 items-center justify-center ${accepted ? 'bg-emerald-400' : 'border border-gray-400'}`}>
             {accepted && <Ionicons name="checkmark" size={18} color="black" />}
           </View>
-          <Text className="text-white text-base">
-            I agree to follow all house rules
-          </Text>
+          <Text className="text-white text-base">I agree to follow all house rules</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -73,7 +76,7 @@ const HouseRulesScreen = () => {
           </Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 

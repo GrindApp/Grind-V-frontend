@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useOnboarding } from "@/context/OnboardingContext";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 
 const GENDERS = ['Male', 'Female', 'Non-binary', 'Prefer not to say'];
 
@@ -10,6 +12,7 @@ const GenderScreen = () => {
   const router = useRouter();
   const [selectedGender, setSelectedGender] = useState<string | null>(null);
   const { onboardingData, updateOnboardingData } = useOnboarding();
+  const insets = useSafeAreaInsets();
   
 
   const handleNext = () => {
@@ -27,7 +30,8 @@ const GenderScreen = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-primary">
+    <View  style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}
+      className="bg-primary">
       <StatusBar barStyle="light-content" />
       
       <View className="flex-1 px-6 py-8">
@@ -99,7 +103,10 @@ const GenderScreen = () => {
           </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+    </View>
+    
+      
+    
   );
 };
 

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Image, ScrollView, Alert, SafeAreaView, StatusBar } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useOnboarding } from '@/context/OnboardingContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 
 const MAX_PHOTOS = 6;
@@ -12,6 +13,7 @@ const PhotosScreen = () => {
   const router = useRouter();
   const [photos, setPhotos] = useState<(string | null)[]>(Array(MAX_PHOTOS).fill(null));
   const { onboardingData, updateOnboardingData } = useOnboarding();
+  const insets = useSafeAreaInsets();
 
   const pickImage = async (index: number) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -59,8 +61,10 @@ updateOnboardingData({ imageUrl: photos.filter((p) => p !== null).slice(0, 5) as
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-primary">
-      <StatusBar barStyle="light-content" />
+    
+      <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}
+      className="bg-primary">
+    <StatusBar barStyle="light-content" />
       
       <View className="flex-1 px-6 py-6">
         {/* Back Button */}
@@ -183,7 +187,9 @@ updateOnboardingData({ imageUrl: photos.filter((p) => p !== null).slice(0, 5) as
                     Don't worry, you can update these preferences in your profile settings later.
                   </Text>
       </View>
-    </SafeAreaView>
+      </View>
+      
+    
   );
 };
 

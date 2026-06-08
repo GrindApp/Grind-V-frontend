@@ -1,7 +1,15 @@
-import React, { useState } from "react";
-import { View, Text, Image, Dimensions, TouchableOpacity } from "react-native";
+import React, { useState, useRef } from "react";
+import {
+  View,
+  Text,
+  Image,
+  Dimensions,
+  TouchableOpacity,
+  FlatList,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Carousel from "react-native-reanimated-carousel";
 import { LinearGradient } from "expo-linear-gradient";
 
 const { width } = Dimensions.get("window");
@@ -36,14 +44,17 @@ const GymCard = ({
   onPress,
   onFavoritePress,
 }: GymCardProps) => {
-  console.log("GymItem jjjjj");
-
   const [currentIndex, setCurrentIndex] = useState(0);
   const [favorite, setFavorite] = useState(isFavorite);
 
   const handleFavoritePress = () => {
     setFavorite(!favorite);
     if (onFavoritePress) onFavoritePress();
+  };
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(e.nativeEvent.contentOffset.x / IMAGE_WIDTH);
+    setCurrentIndex(index);
   };
 
   return (
@@ -60,32 +71,35 @@ const GymCard = ({
         elevation: 10,
       }}
     >
-      {/* Image Carousel with Pagination */}
-      <View>
-        <Carousel
-          width={IMAGE_WIDTH}
-          height={IMAGE_HEIGHT}
+      {/* ─── Image Slider (replaces react-native-reanimated-carousel) ─── */}
+      <View style={{ width: IMAGE_WIDTH, height: IMAGE_HEIGHT }}>
+        <FlatList
           data={images}
-          scrollAnimationDuration={800}
-          autoPlay={false}
-          onProgressChange={(_, absoluteProgress) => {
-            setCurrentIndex(Math.round(absoluteProgress));
-          }}
+          keyExtractor={(_, i) => String(i)}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={handleScroll}
           renderItem={({ item }) => (
-            <View className="relative">
+            <View style={{ width: IMAGE_WIDTH, height: IMAGE_HEIGHT }}>
               <Image
                 source={{ uri: item }}
-                className="w-full h-full"
+                style={{ width: IMAGE_WIDTH, height: IMAGE_HEIGHT }}
                 resizeMode="cover"
               />
               <LinearGradient
                 colors={["transparent", "rgba(0,0,0,0.7)"]}
-                className="absolute bottom-0 left-0 right-0 h-24"
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 96,
+                }}
               />
             </View>
           )}
-          style={{ alignSelf: "center" }}
-          loop
         />
 
         {/* Carousel Pagination */}
@@ -93,9 +107,15 @@ const GymCard = ({
           {images.map((_, index) => (
             <View
               key={index}
-              className={`h-1.5 rounded-full ${
-                currentIndex === index ? "w-6 bg-white" : "w-1.5 bg-white/50"
-              }`}
+              style={{
+                height: 6,
+                borderRadius: 3,
+                width: currentIndex === index ? 24 : 6,
+                backgroundColor:
+                  currentIndex === index
+                    ? "rgba(255,255,255,1)"
+                    : "rgba(255,255,255,0.5)",
+              }}
             />
           ))}
         </View>
@@ -121,14 +141,13 @@ const GymCard = ({
           )}
         </View>
 
-        {/* TODO: Distance Badge */}
+        {/* Distance Badge */}
         <View className="absolute bottom-4 right-4 bg-black/50 px-2.5 py-1.5 rounded-lg flex-row items-center">
           <Ionicons name="location" size={14} color="#ffffff" />
-          <Text className="text-white text-xs ml-1 font-medium">
-            {"Dwarka"}
-          </Text>
+          <Text className="text-white text-xs ml-1 font-medium">{"Dwarka"}</Text>
         </View>
       </View>
+      {/* ─────────────────────────────────────────────────────────────── */}
 
       <View className="p-5">
         {/* Gym Name and Price */}
@@ -142,33 +161,10 @@ const GymCard = ({
           {price && (
             <View className="flex-row items-center">
               <Text className="text-green-400 font-bold">{price}</Text>
-              <Text className="text-gray-400 text-xs ml-1">
-                {priceCategory}
-              </Text>
+              <Text className="text-gray-400 text-xs ml-1">{priceCategory}</Text>
             </View>
           )}
         </View>
-
-        {/* Tags */}
-        {/* {tags.length > 0 && (
-          <View className="flex-row flex-wrap mt-3">
-            {tags.slice(0, maxTagsToShow).map((tag, index) => (
-              <View
-                key={index}
-                className="bg-[#2C2C2E] px-3 py-1.5 rounded-full mr-2 mb-2"
-              >
-                <Text className="text-gray-300 text-xs font-medium">{tag}</Text>
-              </View>
-            ))}
-            {remainingTags > 0 && (
-              <View className="bg-[#2C2C2E] px-3 py-1.5 rounded-full mb-2">
-                <Text className="text-gray-300 text-xs font-medium">
-                  +{remainingTags} more
-                </Text>
-              </View>
-            )}
-          </View>
-        )} */}
 
         {/* Features & Amenities */}
         <View className="flex-row mt-4 justify-between">
@@ -180,24 +176,6 @@ const GymCard = ({
               <Text className="text-gray-300 text-xs ml-2">{amenity}</Text>
             </View>
           ))}
-          {/* <View className="flex-row items-center">
-            <View className="w-8 h-8 bg-[#333336] rounded-full items-center justify-center">
-              <Ionicons name="wifi-outline" size={16} color="#fff" />
-            </View>
-            <Text className="text-gray-300 text-xs ml-2">Wi-Fi</Text>
-          </View>
-          <View className="flex-row items-center">
-            <View className="w-8 h-8 bg-[#333336] rounded-full items-center justify-center">
-              <Ionicons name="water-outline" size={16} color="#fff" />
-            </View>
-            <Text className="text-gray-300 text-xs ml-2">Showers</Text>
-          </View>
-          <View className="flex-row items-center">
-            <View className="w-8 h-8 bg-[#333336] rounded-full items-center justify-center">
-              <Ionicons name="people-outline" size={16} color="#fff" />
-            </View>
-            <Text className="text-gray-300 text-xs ml-2">Classes</Text>
-          </View> */}
         </View>
       </View>
     </TouchableOpacity>

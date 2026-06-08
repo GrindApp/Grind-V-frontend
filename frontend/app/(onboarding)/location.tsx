@@ -5,11 +5,14 @@ import { View, Text, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView, S
 import { Ionicons, Feather } from '@expo/vector-icons';
 import * as Animatable from 'react-native-animatable';
 import { useOnboarding } from '@/context/OnboardingContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 
 const LocationScreen = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const { onboardingData, updateOnboardingData } = useOnboarding();
+  const insets = useSafeAreaInsets();
 
   const requestLocation = async () => {
   setLoading(true);
@@ -59,7 +62,9 @@ const LocationScreen = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-primary">
+    
+      <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}
+            className="bg-primary">
       <StatusBar barStyle="light-content" />
       
       <View className="flex-1 px-6 py-6">
@@ -155,7 +160,7 @@ const LocationScreen = () => {
           Your location data is only used to find matches and is never shared with third parties.
         </Text>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 

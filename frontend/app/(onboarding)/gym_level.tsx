@@ -9,6 +9,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useOnboarding } from "@/context/OnboardingContext";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 
 const LEVELS = [
   {
@@ -32,6 +34,8 @@ const GymLevelScreen = () => {
   const router = useRouter();
   const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
   const { onboardingData, updateOnboardingData } = useOnboarding();
+      const insets = useSafeAreaInsets();
+  
 
   const handleNext = () => {
     if (selectedLevel) {
@@ -48,8 +52,10 @@ const GymLevelScreen = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-primary">
-      <StatusBar barStyle="light-content" />
+    
+      <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}
+      className="bg-primary">
+ <StatusBar barStyle="light-content" />
 
       <View className="flex-1 px-6 py-8">
         {/* Back Button */}
@@ -126,7 +132,9 @@ const GymLevelScreen = () => {
           </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+      </View>
+     
+    
   );
 };
 

@@ -4,6 +4,8 @@ import { View, Text, TouchableOpacity, SafeAreaView, StatusBar } from "react-nat
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useOnboarding } from "@/context/OnboardingContext";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 
 const DOBScreen = () => {
   const router = useRouter();
@@ -12,6 +14,7 @@ const DOBScreen = () => {
   const [ageError, setAgeError] = useState<string | null>(null);
   // const { updateOnboardingData } = useOnboarding();
   const { onboardingData, updateOnboardingData } = useOnboarding();
+  const insets = useSafeAreaInsets();
 
 
   const isEighteenOrOlder = (dob: Date | null): boolean => {
@@ -61,8 +64,10 @@ const DOBScreen = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-primary">
-      <StatusBar barStyle="light-content" />
+    
+      <View style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}
+      className="bg-primary">
+<StatusBar barStyle="light-content" />
       
       <View className="flex-1 px-6 py-8">
         {/* Back Button */}
@@ -136,7 +141,9 @@ const DOBScreen = () => {
           </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+      </View>
+      
+    
   );
 };
 

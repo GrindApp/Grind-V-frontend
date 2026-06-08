@@ -1,23 +1,23 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { useOnboarding } from "@/context/OnboardingContext";
-
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   Keyboard,
-  StatusBar
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 const NameScreen = () => {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [focusedField, setFocusedField] = useState(null);
@@ -25,21 +25,24 @@ const NameScreen = () => {
 
   const isValid = firstName.trim().length > 0 && lastName.trim().length > 0;
 
- const handleNext = () => {
-  if (isValid) {
-    updateOnboardingData({ firstName, lastName });
-    router.push('/dob');
-  } else {
-    alert('Please enter both your first and last name.');
-  }
-};
+  const handleNext = () => {
+    if (isValid) {
+      updateOnboardingData({ firstName, lastName });
+      router.push('/dob');
+    } else {
+      alert('Please enter both your first and last name.');
+    }
+  };
 
   const handleBack = () => {
     router.back();
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-primary">
+    <View
+      style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}
+      className="bg-primary"
+    >
       <StatusBar barStyle="light-content" />
       <Pressable className="flex-1" onPress={() => Keyboard.dismiss()}>
         <KeyboardAvoidingView
@@ -113,7 +116,7 @@ const NameScreen = () => {
           </View>
         </KeyboardAvoidingView>
       </Pressable>
-    </SafeAreaView>
+    </View>
   );
 };
 

@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Dimensions } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+// import Animated, { FadeInDown } from 'react-native-reanimated';
 import ActivitySlider from '@/app/components/homepage/ActivityCarousel';
 
 const { width } = Dimensions.get('window');
@@ -80,7 +80,7 @@ const FitnessProgressScreen = () => {
         </View>
 
         {/* Activity Carousel */}
-        <ActivitySlider />
+        {/* <ActivitySlider /> */}
 
         {/* Timeframe Selector */}
         <View className="px-5 mt-8 mb-6">
@@ -106,13 +106,11 @@ const FitnessProgressScreen = () => {
         </View>
 
         {/* Weekly Summary */}
-        <Animated.View 
-          entering={FadeInDown.delay(100).duration(400)}
-          className="px-5 mb-8"
-        >
+        {/* Replaced <Animated.View entering={FadeInDown...}> — not available in Expo Go */}
+        <View className="px-5 mb-8">
           {renderSectionHeader('Weekly Summary', 'Last 7 days performance', null)}
           <View className="bg-zinc-900 rounded-2xl shadow-lg shadow-black/30 overflow-hidden">
-            <LinearGradient 
+            {/* <LinearGradient 
               colors={['#EF4444', '#F97316']} 
               start={{ x: 0, y: 0 }} 
               end={{ x: 1, y: 0 }}
@@ -132,7 +130,8 @@ const FitnessProgressScreen = () => {
                   </Text>
                 </View>
               </View>
-            </LinearGradient>
+            </LinearGradient> */}
+            <View style={{ backgroundColor: '#EF4444' }} className="px-5 py-4"></View>
             
             <View className="px-5 py-4">
               <View className="flex-row justify-between mb-3">
@@ -151,13 +150,11 @@ const FitnessProgressScreen = () => {
               </View>
             </View>
           </View>
-        </Animated.View>
+        </View>
 
         {/* Workout History */}
-        <Animated.View 
-          entering={FadeInDown.delay(200).duration(400)}
-          className="px-5 mb-6"
-        >
+        {/* Replaced <Animated.View entering={FadeInDown...}> */}
+        <View className="px-5 mb-6">
           {renderSectionHeader('Workout History', 'Your recent activities', 
             <TouchableOpacity className="bg-zinc-800 px-3 py-1.5 rounded-lg">
               <Text className="text-zinc-300 text-sm">View All</Text>
@@ -201,13 +198,11 @@ const FitnessProgressScreen = () => {
               </View>
             </View>
           ))}
-        </Animated.View>
+        </View>
 
         {/* Body Measurements */}
-        <Animated.View 
-          entering={FadeInDown.delay(300).duration(400)}
-          className="px-5 mb-8"
-        >
+        {/* Replaced <Animated.View entering={FadeInDown...}> */}
+        <View className="px-5 mb-8">
           {renderSectionHeader('Body Measurements', 'Track your progress', null)}
           <View className="bg-zinc-900 rounded-2xl p-5 shadow-lg shadow-black/30">
             <View className="flex-row justify-between mb-4">
@@ -250,7 +245,8 @@ const FitnessProgressScreen = () => {
               </View>
             </View>
           </View>
-        </Animated.View>
+        </View>
+
       </ScrollView>
     </SafeAreaView>
   );
