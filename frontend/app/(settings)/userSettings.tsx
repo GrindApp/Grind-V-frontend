@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Image } from "expo-image";
 import {
   View,
@@ -8,9 +8,16 @@ import {
   ScrollView,
   LayoutAnimation,
   Platform,
+  Alert,
   UIManager,
 } from "react-native";
 import Slider from "@react-native-community/slider";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { decodeJWT } from "@/utils/jwt";
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+
+
 import {
   Feather,
   MaterialIcons,
@@ -39,8 +46,74 @@ const SettingsScreen = () => {
   const [showMe, setShowMe] = useState<"Men" | "Women" | "Both">("Men");
   const [gymLevel, setGymLevel] = useState<"Beginner" | "Intermediate" | "Professional">("Beginner");
   const [interests, setInterests] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const [expanded, setExpanded] = useState({ distance: false, showMe: false, gymLevel: false, interest: false });
-  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(null);
+
+
+  const [formDataState, setFormData] = useState({
+    fullName: "",
+    username: "",
+    bio: "",
+  });
+
+  const [profileImage, setProfileImage] = useState("");
+  const [grindImage, setGrindImage] = useState("");
+  const bioCharCount = formDataState.bio?.length || 0;
+  const MAX_BIO_CHARS = 140;
+
+
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const token = await AsyncStorage.getItem("authToken");
+        if (!token) throw new Error("Token not found");
+        const decoded = decodeJWT(token);
+        const userId = decoded?.id || decoded?._id;
+        if (!userId) throw new Error("User ID not found");
+
+        const [profileRes, userRes] = await Promise.all([
+          fetch(`${API_URL}/api/v1/userProfile/user/${userId}`, {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`${API_URL}/api/v1/user/${userId}`, {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        const profileJson = await profileRes.json();
+        const userJson = await userRes.json();
+
+        if (!profileJson.success)
+          throw new Error(profileJson.message || "Failed to load profile");
+        if (!userJson.success)
+          throw new Error(userJson.message || "Failed to load user");
+
+        const userProfile = profileJson.data;
+        const userAccount = userJson.data;
+        setProfileId(userProfile._id);
+
+        setFormData({
+          fullName: `${userProfile.firstName} ${userProfile.lastName}`,
+          username: userAccount.username || "",
+          bio: userProfile.bio || "",
+        });
+
+        setProfileImage(userProfile.imageUrl?.[0] || "");
+        setGrindImage(userProfile.imageUrl?.[1] || "");
+      } catch (err: any) {
+        console.error("Failed to load profile:", err);
+        Alert.alert("Error", err.message || "Failed to load profile");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
 
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -74,14 +147,15 @@ const SettingsScreen = () => {
     }
   };
 
-  const renderSection = (
-    key: keyof typeof expanded,
-    title: string,
-    icon: JSX.Element,
-    content: JSX.Element
-  ) => (
-    <View key={key} className="mb-5">
-      <TouchableOpacity className="bg-[#1C1C1E] p-5 rounded-2xl" onPress={() => toggleExpand(key)}>
+const renderSection = (
+  key: keyof typeof expanded,
+  title: string,
+  icon: React.ReactElement,
+  content: React.ReactElement
+) => (
+  <View key={key} className="mb-5">
+    <View className="bg-[#1C1C1E] rounded-2xl overflow-hidden">
+      <TouchableOpacity className="p-5" onPress={() => toggleExpand(key)}>
         <View className="flex-row justify-between items-center">
           <View className="flex-row items-center gap-3">
             {icon}
@@ -89,34 +163,39 @@ const SettingsScreen = () => {
           </View>
           <Ionicons name={expanded[key] ? "chevron-up" : "chevron-down"} size={18} color="#A1A1AA" />
         </View>
-        {expanded[key] && content}
       </TouchableOpacity>
+      {expanded[key] && (
+        <View className="px-5 pb-5">
+          {content}
+        </View>
+      )}
     </View>
-  );
+  </View>
+);
 
   return (
     <SafeAreaView className="bg-primary flex-1">
       <ScrollView className="flex-1 px-5 py-6">
         {/* Header */}
-        
+
         <View className="flex-row items-center mb-6 space-x-4">
-  <TouchableOpacity 
-    onPress={() => router.back()}
-    className="p-2 bg-zinc-800/80 rounded-full"
-    activeOpacity={0.7}
-  >
-    <Ionicons name="chevron-back" size={18} color="white" />
-  </TouchableOpacity>
-  
-  <Text className="text-white text-2xl font-bold"> Settings</Text>
-</View>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="p-2 bg-zinc-800/80 rounded-full"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={18} color="white" />
+          </TouchableOpacity>
+
+          <Text className="text-white text-2xl font-bold"> Settings</Text>
+        </View>
 
 
         {/* Profile */}
         <View className="flex-row items-center justify-between mb-7 bg-[#1C1C1E] px-5 py-5 rounded-2xl">
           <View>
-            <Text className="text-white text-xl font-semibold">Ayush Verma</Text>
-            <Text className="text-gray-400 text-sm mt-1">ayush@example.com</Text>
+            <Text className="text-white text-xl font-semibold">{formDataState.fullName}</Text>
+            <Text className="text-gray-400 text-sm mt-1">{formDataState.username}</Text>
             <TouchableOpacity onPress={() => router.push("/(settings)/EditProfileScreen")} className="mt-3 flex-row items-center">
               <Text className="text-accent font-medium">Edit Profile</Text>
               <Feather name="chevron-right" size={16} color="#EF4444" />

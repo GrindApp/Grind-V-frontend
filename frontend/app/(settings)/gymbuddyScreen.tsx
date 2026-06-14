@@ -143,7 +143,7 @@ const GymBuddyScreen = () => {
       const currentUserId = decoded?.id || decoded?._id;
 
       const response = await fetch(
-        "http://192.168.1.10:3000/api/v1/friends/list-friends",
+        `${API_URL}/api/v1/friends/list-friends`,
         {
           method: "GET",
           headers: {
@@ -178,21 +178,21 @@ const GymBuddyScreen = () => {
     }
   };
 
-  const fetchBlockedBuddies = async () => {
-    const response = await fetch(
-      "http://192.168.x.x:3000/api/v1/friends/blocked"
-    );
-    const result = await response.json();
+  // const fetchBlockedBuddies = async () => {
+  //   const response = await fetch(
+  //     `${API_URL}/api/v1/friends/blocked`
+  //   );
+  //   const result = await response.json();
 
-    const transformed = result.data.map((blocked: any) => ({
-      id: blocked._id,
-      name: `${blocked.user1.firstName} ${blocked.user1.lastName}`,
-      image: blocked.user1.imageUrl[0],
-      status: blocked.status,
-    }));
+  //   const transformed = result.data.map((blocked: any) => ({
+  //     id: blocked._id,
+  //     name: `${blocked.user1.firstName} ${blocked.user1.lastName}`,
+  //     image: blocked.user1.imageUrl[0],
+  //     status: blocked.status,
+  //   }));
 
-    setBuddies((prev) => ({ ...prev, blocked: transformed }));
-  };
+  //   setBuddies((prev) => ({ ...prev, blocked: transformed }));
+  // };
 
   // Initial data fetch
   useEffect(() => {
@@ -200,7 +200,7 @@ const GymBuddyScreen = () => {
       await Promise.all([
         fetchPendingRequests(),
         fetchAddedBuddies(),
-        fetchBlockedBuddies(),
+        // fetchBlockedBuddies(),
       ]);
     };
     fetchAll();
@@ -515,12 +515,12 @@ const GymBuddyScreen = () => {
                 count={buddies.added.length}
                 icon="people"
               />
-              <TabItem
+              {/* <TabItem
                 tab="blocked"
                 label="Blocked"
                 count={buddies.blocked.length}
                 icon="block"
-              />
+              /> */}
             </View>
           </View>
         </View>

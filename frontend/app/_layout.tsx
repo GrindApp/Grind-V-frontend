@@ -12,6 +12,7 @@ import {
 const queryClient = new QueryClient();
 export default function RootLayout() {
   return (
+    
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
         <OnboardingProvider>
