@@ -12,6 +12,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 interface OtpModalProps {
   visible: boolean;
@@ -19,7 +23,7 @@ interface OtpModalProps {
   phoneNumber?: string;
 }
 
-const OtpModal: React.FC<OtpModalProps> = ({ visible, onClose, phoneNumber = "+91 ••• ••• 4789" }) => {
+const OtpModal: React.FC<OtpModalProps> = ({ visible, onClose, phoneNumber = '+91 ••• ••• 4789' }) => {
   const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
   const [timer, setTimer] = useState<number>(30);
   const [loading, setLoading] = useState<boolean>(false);
@@ -29,9 +33,7 @@ const OtpModal: React.FC<OtpModalProps> = ({ visible, onClose, phoneNumber = "+9
   const router = useRouter();
 
   useEffect(() => {
-    if (visible) {
-      resetOtp();
-    }
+    if (visible) resetOtp();
   }, [visible]);
 
   useEffect(() => {
@@ -42,9 +44,8 @@ const OtpModal: React.FC<OtpModalProps> = ({ visible, onClose, phoneNumber = "+9
   }, [visible, timer]);
 
   useEffect(() => {
-    const filled = otp.every((digit) => digit !== '');
-    if (filled) {
-      autoSubmitOtp();
+    if (otp.every((digit) => digit !== '')) {
+      verifyOtp();
     }
   }, [otp]);
 
@@ -52,29 +53,21 @@ const OtpModal: React.FC<OtpModalProps> = ({ visible, onClose, phoneNumber = "+9
     setOtp(['', '', '', '', '', '']);
     setTimer(30);
     setLoading(false);
-    setTimeout(() => {
-      inputRefs.current[0]?.focus();
-    }, 250);
+    setTimeout(() => inputRefs.current[0]?.focus(), 250);
   };
 
   const handleOtpChange = (text: string, index: number) => {
-    // Handle paste of full OTP
     if (text.length > 1) {
       const otpArray = text.slice(0, 6).split('');
       const filledOtp = [...otpArray, ...Array(6 - otpArray.length).fill('')];
       setOtp(filledOtp.slice(0, 6));
-      
-      // Focus on the last entered digit or the last input
       const lastIndex = Math.min(otpArray.length - 1, 5);
       inputRefs.current[lastIndex]?.focus();
     } else {
       const updatedOtp = [...otp];
       updatedOtp[index] = text;
       setOtp(updatedOtp);
-
-      if (text && index < 5) {
-        inputRefs.current[index + 1]?.focus();
-      }
+      if (text && index < 5) inputRefs.current[index + 1]?.focus();
     }
   };
 
@@ -84,36 +77,65 @@ const OtpModal: React.FC<OtpModalProps> = ({ visible, onClose, phoneNumber = "+9
     }
   };
 
-  const autoSubmitOtp = () => {
-    if (loading) return;
-    setLoading(true);
+ const verifyOtp = async () => {
+  if (loading) return;
+  setLoading(true);
 
-    const enteredOtp = otp.join('');
+  try {
+    const response = await fetch(`${API_URL}/api/v1/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: phoneNumber, otp: otp.join('') }),
+    });
 
-    // Simulated validation
-    setTimeout(() => {
-      setLoading(false);
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data?.message || 'Verification failed.');
+    }
 
-      if (enteredOtp === '123456') {
-        Alert.alert('Success', 'Phone number verified successfully!');
-        onClose(); 
-        router.push('/(onboarding)/house_rules');
-        
+    onClose();
 
-      } else {
-        Alert.alert('Verification Failed', 'The OTP you entered is incorrect. Please try again.');
-        resetOtp();
-      }
-    }, 1500);
-  };
-
-  const resendOtp = () => {
-    if (timer > 0) return;
-    
-    // Show feedback that OTP is being sent
-    Alert.alert('OTP Sent', 'A new verification code has been sent to your mobile number.');
-    setTimer(30);
+    if (data.data.isNewUser) {
+      // ✅ New user — go collect username
+      router.push({
+        pathname: '/(onboarding)/username',
+        params: { phoneNumber },
+      });
+    } else {
+      // ✅ Existing user — already logged in, store token and skip onboarding
+      await AsyncStorage.setItem('authToken', data.data.token);
+      router.replace("/(tabs)/(home)/HomeScreen");
+    }
+  } catch (error: any) {
+    Alert.alert('Verification Failed', error.message || 'The OTP you entered is incorrect. Please try again.');
     resetOtp();
+  } finally {
+    setLoading(false);
+  }
+};
+
+  const resendOtp = async () => {
+    if (timer > 0) return;
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/auth/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneNumber }), 
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.message || 'Failed to resend OTP.');
+      }
+
+      Alert.alert('OTP Sent', 'A new verification code has been sent to your mobile number.');
+      setTimer(30);
+      resetOtp();
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Could not resend OTP. Please try again.');
+    }
   };
 
   return (
@@ -123,21 +145,21 @@ const OtpModal: React.FC<OtpModalProps> = ({ visible, onClose, phoneNumber = "+9
           {/* Header */}
           <View className="bg-zinc-800 px-6 py-4 flex-row justify-between items-center">
             <Text className="text-white font-bold text-lg">Verify Phone</Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={onClose}
               className="w-8 h-8 rounded-full bg-zinc-700 items-center justify-center"
             >
               <Ionicons name="close" size={16} color="#FFF" />
             </TouchableOpacity>
           </View>
-          
+
           {/* Content */}
           <View className="p-6">
             <Text className="text-zinc-400 mb-1">A verification code has been sent to</Text>
             <Text className="text-white text-base font-medium mb-6">{phoneNumber}</Text>
-            
+
             <Text className="text-white font-medium mb-3">Enter 6-digit OTP</Text>
-            
+
             {/* OTP Input Fields */}
             <View className="flex-row justify-between mb-6">
               {otp.map((digit, index) => (
@@ -170,7 +192,6 @@ const OtpModal: React.FC<OtpModalProps> = ({ visible, onClose, phoneNumber = "+9
               <Text className="text-zinc-400 text-center mb-2">
                 {timer > 0 ? `Resend code in ${timer} seconds` : "Didn't receive the code?"}
               </Text>
-              
               <TouchableOpacity
                 disabled={timer > 0}
                 onPress={resendOtp}
@@ -181,16 +202,14 @@ const OtpModal: React.FC<OtpModalProps> = ({ visible, onClose, phoneNumber = "+9
                 </Text>
               </TouchableOpacity>
             </View>
-            
+
             {/* Verify Button */}
             <TouchableOpacity
-              onPress={autoSubmitOtp}
-              disabled={!otp.every(digit => digit !== '')}
-              className={`py-3 rounded-lg ${otp.every(digit => digit !== '') ? 'bg-red-500' : 'bg-zinc-800'}`}
+              onPress={verifyOtp}
+              disabled={!otp.every((digit) => digit !== '') || loading}
+              className={`py-3 rounded-lg ${otp.every((digit) => digit !== '') ? 'bg-red-500' : 'bg-zinc-800'}`}
             >
-              <Text className="text-white text-center font-bold">
-                VERIFY
-              </Text>
+              <Text className="text-white text-center font-bold">VERIFY</Text>
             </TouchableOpacity>
           </View>
         </View>
