@@ -1,255 +1,761 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View, Text, ScrollView, TouchableOpacity, TextInput,
+  ActivityIndicator, Alert, StyleSheet,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-// import Animated, { FadeInDown } from 'react-native-reanimated';
-import ActivitySlider from '@/app/components/homepage/ActivityCarousel';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { decodeJWT } from '@/utils/jwt';
 
-const { width } = Dimensions.get('window');
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-const FitnessProgressScreen = () => {
-  const [activeTimeframe, setActiveTimeframe] = useState('Week');
-  
-  // Example workout data
-  const workoutData = [
-    {
-      date: 'Apr 23, 2025',
-      exercises: [
-        { name: 'Push-ups', sets: 3, reps: 12, completed: true },
-        { name: 'Squats', sets: 4, reps: 15, completed: true },
-        { name: 'Hamstring Stretch', duration: '5 min', completed: true },
-      ],
-      steps: 9870,
-      calories: 320,
-      duration: '45 min'
-    },
-    {
-      date: 'Apr 21, 2025',
-      exercises: [
-        { name: 'Pull-ups', sets: 3, reps: 8, completed: true },
-        { name: 'Lunges', sets: 3, reps: 10, completed: true },
-        { name: 'Shoulder Press', sets: 3, reps: 12, completed: false },
-      ],
-      steps: 8540,
-      calories: 280,
-      duration: '38 min'
-    },
-    {
-      date: 'Apr 19, 2025',
-      exercises: [
-        { name: 'Deadlifts', sets: 4, reps: 8, completed: true },
-        { name: 'Planks', duration: '3 min', completed: true },
-        { name: 'Running', duration: '20 min', completed: true },
-      ],
-      steps: 12450,
-      calories: 450,
-      duration: '65 min'
+// ─── Types ────────────────────────────────────────────────────────────────────
+type FormData = {
+  fitnessLevel: string;
+  goal: string;
+  workoutDaysPerWeek: number;
+  sessionDuration: number;
+  workoutLocation: string;
+  equipmentAvailable: string[];
+  injuriesOrConditions: string[];
+  height: string;
+  weight: string;
+};
+
+const INITIAL_FORM: FormData = {
+  fitnessLevel: '',
+  goal: '',
+  workoutDaysPerWeek: 4,
+  sessionDuration: 45,
+  workoutLocation: '',
+  equipmentAvailable: [],
+  injuriesOrConditions: [],
+  height: '',
+  weight: '',
+};
+
+// ─── Options ──────────────────────────────────────────────────────────────────
+const LEVELS = [
+  { id: 'beginner', label: 'Beginner', icon: 'leaf-outline', desc: 'New to working out' },
+  { id: 'intermediate', label: 'Intermediate', icon: 'barbell-outline', desc: '1–3 years experience' },
+  { id: 'advanced', label: 'Advanced', icon: 'flame-outline', desc: '3+ years experience' },
+];
+
+const GOALS = [
+  { id: 'weight_loss', label: 'Weight Loss', icon: 'trending-down-outline' },
+  { id: 'muscle_gain', label: 'Muscle Gain', icon: 'body-outline' },
+  { id: 'strength', label: 'Strength', icon: 'barbell-outline' },
+  { id: 'endurance', label: 'Endurance', icon: 'bicycle-outline' },
+  { id: 'flexibility', label: 'Flexibility', icon: 'accessibility-outline' },
+  { id: 'general_fitness', label: 'General Fitness', icon: 'fitness-outline' },
+];
+
+const LOCATIONS = [
+  { id: 'gym', label: 'Gym', icon: 'business-outline' },
+  { id: 'home', label: 'Home', icon: 'home-outline' },
+  { id: 'outdoor', label: 'Outdoor', icon: 'leaf-outline' },
+];
+
+const EQUIPMENT = ['Dumbbells', 'Barbell', 'Resistance Band', 'Kettlebell', 'Pull-up Bar', 'Bench', 'Cable Machine', 'Bodyweight Only'];
+
+const INJURIES = ['Lower Back Pain', 'Knee Pain', 'Shoulder Injury', 'Wrist Pain', 'Hip Pain', 'Neck Pain', 'Asthma', 'Heart Condition'];
+
+const DAY_OPTIONS = [3, 4, 5, 6];
+const DURATION_OPTIONS = [30, 45, 60, 90];
+
+// ─── Small helpers ─────────────────────────────────────────────────────────────
+const goalLabel = (g: string) => GOALS.find(x => x.id === g)?.label ?? g;
+const levelLabel = (l: string) => LEVELS.find(x => x.id === l)?.label ?? l;
+
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const todayName = () => new Date().toLocaleDateString('en-US', { weekday: 'long' });
+
+// ─── Chip ─────────────────────────────────────────────────────────────────────
+const Chip = ({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    style={[styles.chip, selected && styles.chipSelected]}
+    activeOpacity={0.7}
+  >
+    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+  </TouchableOpacity>
+);
+
+// ─── Main Screen ───────────────────────────────────────────────────────────────
+export default function LorePage() {
+  const [userId, setUserId] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [activePlan, setActivePlan] = useState<any>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Form state
+  const [step, setStep] = useState(0); // 0=level, 1=goal, 2=schedule, 3=location, 4=health, 5=plans
+  const [form, setForm] = useState<FormData>(INITIAL_FORM);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [fetchingPlans, setFetchingPlans] = useState(false);
+  const [subscribing, setSubscribing] = useState<string | null>(null);
+
+  // Load user + check for existing plan
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const t = await AsyncStorage.getItem('authToken');
+        if (!t) return;
+        setToken(t);
+        const decoded: any = decodeJWT(t);
+        const uid = decoded?.id;
+        setUserId(uid);
+
+        const res = await fetch(`${API_URL}/api/v1/workout-plan/${uid}`, {
+          headers: { Authorization: `Bearer ${t}` },
+        });
+        const data = await res.json();
+        const plans = data.data ?? [];
+        if (plans.length > 0) setActivePlan(plans[0]);
+      } catch (e) {
+        console.error('Error loading lore:', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
+  }, []);
+
+  const fetchTemplates = useCallback(async () => {
+    setFetchingPlans(true);
+    try {
+      const params = new URLSearchParams();
+      if (form.fitnessLevel) params.set('fitnessLevel', form.fitnessLevel);
+      if (form.goal) params.set('goal', form.goal);
+      const res = await fetch(`${API_URL}/api/v1/workout-plan/templates?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setTemplates(data.data ?? []);
+    } catch (e) {
+      console.error('Error fetching templates:', e);
+    } finally {
+      setFetchingPlans(false);
     }
-  ];
+  }, [form.fitnessLevel, form.goal, token]);
 
-  const weeklyStats = {
-    workoutsCompleted: 3,
-    totalWorkouts: 5,
-    totalTime: '148 min',
-    totalCalories: 1050,
-    totalSteps: 30860
+  const subscribe = async (templateId: string) => {
+    setSubscribing(templateId);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/workout-plan/subscribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          templateId,
+          workoutLocation: form.workoutLocation,
+          injuriesOrConditions: form.injuriesOrConditions,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      setActivePlan(data.data);
+      setShowForm(false);
+      setStep(0);
+      setForm(INITIAL_FORM);
+    } catch (e: any) {
+      Alert.alert('Error', e.message ?? 'Could not subscribe to plan');
+    } finally {
+      setSubscribing(null);
+    }
   };
 
-  const renderSectionHeader = (title: string | number | boolean | React.ReactElement<any, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined, subtitle: string | number | boolean | React.ReactElement<any, string | React.JSXElementConstructor<any>> | Iterable<React.ReactNode> | null | undefined, rightElement: string | number | boolean | React.JSX.Element | Iterable<React.ReactNode> | null | undefined) => (
-    <View className="flex-row justify-between items-center mb-4">
-      <View>
-        <Text className="text-white text-lg font-bold">{title}</Text>
-        {subtitle && <Text className="text-zinc-400 text-sm mt-1">{subtitle}</Text>}
-      </View>
-      {rightElement}
-    </View>
+  const nextStep = () => {
+    if (step === 4) { fetchTemplates(); }
+    setStep(s => s + 1);
+  };
+
+  const canProceed = () => {
+    if (step === 0) return !!form.fitnessLevel;
+    if (step === 1) return !!form.goal;
+    if (step === 3) return !!form.workoutLocation;
+    return true;
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}><ActivityIndicator color="#A78BFA" size="large" /></View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Active plan view ──────────────────────────────────────────────────────
+  if (activePlan && !showForm) return (
+    <ActivePlanView
+      plan={activePlan}
+      onReset={() => {
+        setStep(0);
+        setForm(INITIAL_FORM);
+        setTemplates([]);
+        setShowForm(true);
+      }}
+    />
   );
 
+  // ── Form wizard ───────────────────────────────────────────────────────────
   return (
-    <SafeAreaView className="flex-1 bg-primary" edges={['top']}>
-      <ScrollView 
-        className="flex-1"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 100 }}
-      >
-        {/* Header */}
-        <View className="px-5 pt-4 pb-2">
-          <Text className="text-zinc-400 text-sm">Your Progress</Text>
-          <Text className="text-white text-2xl font-bold mt-1">Fitness Dashboard</Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        {step > 0 ? (
+          <TouchableOpacity onPress={() => setStep(s => s - 1)} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={22} color="#fff" />
+          </TouchableOpacity>
+        ) : activePlan ? (
+          <TouchableOpacity onPress={() => setShowForm(false)} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={22} color="#fff" />
+          </TouchableOpacity>
+        ) : null}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.headerTitle}>My Lore</Text>
+          <Text style={styles.headerSub}>
+            {activePlan ? 'Choose a new plan' : 'Build your fitness identity'}
+          </Text>
         </View>
+        <Text style={styles.stepIndicator}>{step + 1} / 6</Text>
+      </View>
 
-        {/* Activity Carousel */}
-        {/* <ActivitySlider /> */}
+      {/* Progress bar */}
+      <View style={styles.progressTrack}>
+        <View style={[styles.progressFill, { width: `${((step + 1) / 6) * 100}%` }]} />
+      </View>
 
-        {/* Timeframe Selector */}
-        <View className="px-5 mt-8 mb-6">
-          <View className="flex-row justify-between bg-zinc-900 rounded-xl p-1">
-            {['Week', 'Month', 'Year'].map((timeframe) => (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+
+        {/* Step 0 — Fitness Level */}
+        {step === 0 && (
+          <View>
+            <Text style={styles.stepTitle}>What's your fitness level?</Text>
+            <Text style={styles.stepSub}>We'll tailor your plan to match your experience.</Text>
+            {LEVELS.map(l => (
               <TouchableOpacity
-                key={timeframe}
-                onPress={() => setActiveTimeframe(timeframe)}
-                className={`py-2.5 px-4 rounded-lg flex-1 items-center ${
-                  activeTimeframe === timeframe ? 'bg-red-600' : 'bg-transparent'
-                }`}
+                key={l.id}
+                style={[styles.optionCard, form.fitnessLevel === l.id && styles.optionCardSelected]}
+                onPress={() => setForm(f => ({ ...f, fitnessLevel: l.id }))}
+                activeOpacity={0.8}
               >
-                <Text
-                  className={`font-medium ${
-                    activeTimeframe === timeframe ? 'text-white' : 'text-zinc-400'
-                  }`}
-                >
-                  {timeframe}
-                </Text>
+                <View style={[styles.optionIcon, form.fitnessLevel === l.id && styles.optionIconSelected]}>
+                  <Ionicons name={l.icon as any} size={22} color={form.fitnessLevel === l.id ? '#fff' : '#A78BFA'} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.optionLabel}>{l.label}</Text>
+                  <Text style={styles.optionDesc}>{l.desc}</Text>
+                </View>
+                {form.fitnessLevel === l.id && <Ionicons name="checkmark-circle" size={22} color="#A78BFA" />}
               </TouchableOpacity>
             ))}
           </View>
-        </View>
+        )}
 
-        {/* Weekly Summary */}
-        {/* Replaced <Animated.View entering={FadeInDown...}> — not available in Expo Go */}
-        <View className="px-5 mb-8">
-          {renderSectionHeader('Weekly Summary', 'Last 7 days performance', null)}
-          <View className="bg-zinc-900 rounded-2xl shadow-lg shadow-black/30 overflow-hidden">
-            {/* <LinearGradient 
-              colors={['#EF4444', '#F97316']} 
-              start={{ x: 0, y: 0 }} 
-              end={{ x: 1, y: 0 }}
-              className="px-5 py-4"
-            >
-              <View className="flex-row justify-between">
-                <View>
-                  <Text className="text-white opacity-80 text-sm">Completion Rate</Text>
-                  <Text className="text-white text-2xl font-bold mt-1">
-                    {Math.round((weeklyStats.workoutsCompleted / weeklyStats.totalWorkouts) * 100)}%
-                  </Text>
-                </View>
-                <View className="items-end">
-                  <Text className="text-white opacity-80 text-sm">Total Workouts</Text>
-                  <Text className="text-white text-2xl font-bold mt-1">
-                    {weeklyStats.workoutsCompleted}/{weeklyStats.totalWorkouts}
-                  </Text>
-                </View>
-              </View>
-            </LinearGradient> */}
-            <View style={{ backgroundColor: '#EF4444' }} className="px-5 py-4"></View>
-            
-            <View className="px-5 py-4">
-              <View className="flex-row justify-between mb-3">
-                <View className="w-1/3">
-                  <Text className="text-zinc-400 text-xs mb-1">Total Time</Text>
-                  <Text className="text-white font-bold">{weeklyStats.totalTime}</Text>
-                </View>
-                <View className="w-1/3 items-center">
-                  <Text className="text-zinc-400 text-xs mb-1">Calories</Text>
-                  <Text className="text-white font-bold">{weeklyStats.totalCalories} kcal</Text>
-                </View>
-                <View className="w-1/3 items-end">
-                  <Text className="text-zinc-400 text-xs mb-1">Steps</Text>
-                  <Text className="text-white font-bold">{weeklyStats.totalSteps.toLocaleString()}</Text>
-                </View>
-              </View>
+        {/* Step 1 — Goal */}
+        {step === 1 && (
+          <View>
+            <Text style={styles.stepTitle}>What's your goal?</Text>
+            <Text style={styles.stepSub}>Choose what you want to achieve.</Text>
+            <View style={styles.goalGrid}>
+              {GOALS.map(g => (
+                <TouchableOpacity
+                  key={g.id}
+                  style={[styles.goalCard, form.goal === g.id && styles.goalCardSelected]}
+                  onPress={() => setForm(f => ({ ...f, goal: g.id }))}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name={g.icon as any} size={26} color={form.goal === g.id ? '#A78BFA' : '#555'} />
+                  <Text style={[styles.goalLabel, form.goal === g.id && { color: '#A78BFA' }]}>{g.label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
+        )}
+
+        {/* Step 2 — Schedule */}
+        {step === 2 && (
+          <View>
+            <Text style={styles.stepTitle}>Your schedule</Text>
+            <Text style={styles.stepSub}>How often and how long do you want to train?</Text>
+
+            <Text style={styles.sectionLabel}>Days per week</Text>
+            <View style={styles.pillRow}>
+              {DAY_OPTIONS.map(d => (
+                <TouchableOpacity
+                  key={d}
+                  style={[styles.pill, form.workoutDaysPerWeek === d && styles.pillSelected]}
+                  onPress={() => setForm(f => ({ ...f, workoutDaysPerWeek: d }))}
+                >
+                  <Text style={[styles.pillText, form.workoutDaysPerWeek === d && styles.pillTextSelected]}>{d}x</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.sectionLabel, { marginTop: 24 }]}>Session duration</Text>
+            <View style={styles.pillRow}>
+              {DURATION_OPTIONS.map(d => (
+                <TouchableOpacity
+                  key={d}
+                  style={[styles.pill, form.sessionDuration === d && styles.pillSelected]}
+                  onPress={() => setForm(f => ({ ...f, sessionDuration: d }))}
+                >
+                  <Text style={[styles.pillText, form.sessionDuration === d && styles.pillTextSelected]}>{d} min</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Step 3 — Location & Equipment */}
+        {step === 3 && (
+          <View>
+            <Text style={styles.stepTitle}>Where do you train?</Text>
+            <Text style={styles.stepSub}>We'll match equipment-appropriate exercises.</Text>
+
+            <View style={styles.locRow}>
+              {LOCATIONS.map(l => (
+                <TouchableOpacity
+                  key={l.id}
+                  style={[styles.locCard, form.workoutLocation === l.id && styles.locCardSelected]}
+                  onPress={() => setForm(f => ({ ...f, workoutLocation: l.id }))}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name={l.icon as any} size={28} color={form.workoutLocation === l.id ? '#A78BFA' : '#555'} />
+                  <Text style={[styles.locLabel, form.workoutLocation === l.id && { color: '#A78BFA' }]}>{l.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[styles.sectionLabel, { marginTop: 24 }]}>Equipment available</Text>
+            <View style={styles.chipWrap}>
+              {EQUIPMENT.map(e => (
+                <Chip
+                  key={e} label={e}
+                  selected={form.equipmentAvailable.includes(e)}
+                  onPress={() => setForm(f => ({
+                    ...f,
+                    equipmentAvailable: f.equipmentAvailable.includes(e)
+                      ? f.equipmentAvailable.filter(x => x !== e)
+                      : [...f.equipmentAvailable, e],
+                  }))}
+                />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Step 4 — Health */}
+        {step === 4 && (
+          <View>
+            <Text style={styles.stepTitle}>Health & body info</Text>
+            <Text style={styles.stepSub}>This helps us avoid exercises that could hurt you.</Text>
+
+            <View style={styles.inputRow}>
+              <View style={styles.inputHalf}>
+                <Text style={styles.inputLabel}>Height (cm)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={form.height}
+                  onChangeText={v => setForm(f => ({ ...f, height: v }))}
+                  keyboardType="numeric"
+                  placeholder="175"
+                  placeholderTextColor="#555"
+                />
+              </View>
+              <View style={styles.inputHalf}>
+                <Text style={styles.inputLabel}>Weight (kg)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={form.weight}
+                  onChangeText={v => setForm(f => ({ ...f, weight: v }))}
+                  keyboardType="numeric"
+                  placeholder="70"
+                  placeholderTextColor="#555"
+                />
+              </View>
+            </View>
+
+            <Text style={[styles.sectionLabel, { marginTop: 24 }]}>Any injuries or conditions?</Text>
+            <Text style={styles.stepSub}>Select all that apply.</Text>
+            <View style={styles.chipWrap}>
+              {INJURIES.map(inj => (
+                <Chip
+                  key={inj} label={inj}
+                  selected={form.injuriesOrConditions.includes(inj)}
+                  onPress={() => setForm(f => ({
+                    ...f,
+                    injuriesOrConditions: f.injuriesOrConditions.includes(inj)
+                      ? f.injuriesOrConditions.filter(x => x !== inj)
+                      : [...f.injuriesOrConditions, inj],
+                  }))}
+                />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Step 5 — Plans */}
+        {step === 5 && (
+          <View>
+            <Text style={styles.stepTitle}>Recommended plans</Text>
+            <Text style={styles.stepSub}>
+              {levelLabel(form.fitnessLevel)} · {goalLabel(form.goal)} · {form.workoutDaysPerWeek}x/week
+            </Text>
+
+            {fetchingPlans ? (
+              <View style={styles.centered}><ActivityIndicator color="#A78BFA" /></View>
+            ) : templates.length === 0 ? (
+              <View style={[styles.centered, { marginTop: 40 }]}>
+                <Ionicons name="search-outline" size={48} color="#333" />
+                <Text style={styles.emptyText}>No plans found for your profile.</Text>
+                <Text style={[styles.emptyText, { fontSize: 12, marginTop: 4 }]}>
+                  Ask your trainer to add templates to the database.
+                </Text>
+              </View>
+            ) : (
+              templates.map(plan => (
+                <View key={plan._id} style={styles.planCard}>
+                  <View style={styles.planCardHeader}>
+                    <View style={{ flex: 1, marginRight: 12 }}>
+                      <Text style={styles.planCardTitle}>{plan.name}</Text>
+                      <Text style={styles.planCardMeta}>
+                        {levelLabel(plan.fitnessLevel)} · {plan.workoutDaysPerWeek}x/week · {plan.sessionDuration} min
+                      </Text>
+                    </View>
+                    <View style={styles.planBadge}>
+                      <Text style={styles.planBadgeText}>{plan.workoutLocation}</Text>
+                    </View>
+                  </View>
+
+                  {/* Goals tags */}
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                    {(plan.goals ?? []).map((g: string) => (
+                      <View key={g} style={styles.goalTag}>
+                        <Text style={styles.goalTagText}>{goalLabel(g)}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Plan summary */}
+                  <View style={styles.planDay}>
+                    <Text style={styles.planDayName}>Duration</Text>
+                    <Text style={styles.planDayFocus}>{plan.durationWeeks} weeks</Text>
+                  </View>
+                  {plan.description ? (
+                    <Text style={styles.planDescription}>{plan.description}</Text>
+                  ) : null}
+
+                  <TouchableOpacity
+                    style={[styles.subscribeBtn, subscribing === plan._id && { opacity: 0.7 }]}
+                    onPress={() => subscribe(plan._id)}
+                    disabled={!!subscribing}
+                    activeOpacity={0.8}
+                  >
+                    {subscribing === plan._id
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : <Text style={styles.subscribeBtnText}>Subscribe to this plan</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Next button */}
+      {step < 5 && (
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={[styles.nextBtn, !canProceed() && styles.nextBtnDisabled]}
+            onPress={nextStep}
+            disabled={!canProceed()}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.nextBtnText}>{step === 4 ? 'Find my plan' : 'Continue'}</Text>
+            <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 8 }} />
+          </TouchableOpacity>
+        </View>
+      )}
+    </SafeAreaView>
+  );
+}
+
+// ─── Active Plan View ──────────────────────────────────────────────────────────
+// activePlan shape: { currentWeek, currentDay, plan: WorkoutCatalog }
+function ActivePlanView({ plan: userPlan, onReset }: { plan: any; onReset: () => void }) {
+  const catalog = userPlan.plan ?? {};
+  const currentWeek = userPlan.currentWeek ?? 1;
+  const currentDay = userPlan.currentDay ?? 1;
+
+  // Current day's workout from the catalog weeks array
+  const weekData = catalog.weeks?.find((w: any) => w.weekNumber === currentWeek)
+    ?? catalog.weeks?.[0];
+  const todayData = weekData?.days?.find((d: any) => d.dayNumber === currentDay)
+    ?? weekData?.days?.[0];
+
+  // All days in the current week for the weekly row
+  const currentWeekDays: any[] = weekData?.days ?? [];
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+        {/* Header */}
+        <View style={[styles.header, { paddingBottom: 20 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>My Lore</Text>
+            <Text style={styles.headerSub}>{catalog.name}</Text>
+          </View>
+          <TouchableOpacity onPress={onReset} style={styles.changeBtn}>
+            <Text style={styles.changeBtnText}>Change plan</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Workout History */}
-        {/* Replaced <Animated.View entering={FadeInDown...}> */}
-        <View className="px-5 mb-6">
-          {renderSectionHeader('Workout History', 'Your recent activities', 
-            <TouchableOpacity className="bg-zinc-800 px-3 py-1.5 rounded-lg">
-              <Text className="text-zinc-300 text-sm">View All</Text>
-            </TouchableOpacity>
-          )}
-          
-          {workoutData.map((workout, index) => (
-            <View key={index} className="bg-zinc-900 rounded-2xl p-5 mb-4 shadow-lg shadow-black/30">
-              <View className="flex-row justify-between items-center mb-4">
-                <Text className="text-white text-base font-semibold">{workout.date}</Text>
-                <View className="flex-row items-center bg-zinc-800 px-2.5 py-1 rounded-lg">
-                  <Ionicons name="time-outline" size={14} color="#EF4444" />
-                  <Text className="text-white text-xs ml-1">{workout.duration}</Text>
-                </View>
-              </View>
-
-              <View className="mb-4">
-                <Text className="text-zinc-400 text-xs mb-2">Exercises</Text>
-                {workout.exercises.map((exercise, exIndex) => (
-                  <View key={exIndex} className="flex-row items-center mb-2 last:mb-0">
-                    <View className={`w-3 h-3 rounded-full mr-2 ${exercise.completed ? 'bg-green-500' : 'bg-zinc-500'}`} />
-                    <Text className="text-white text-sm flex-1">{exercise.name}</Text>
-                    <Text className="text-zinc-400 text-xs">
-                      {exercise.sets && exercise.reps 
-                        ? `${exercise.sets} × ${exercise.reps}` 
-                        : exercise.duration}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-
-              <View className="flex-row justify-between pt-3 border-t border-zinc-800">
-                <View className="flex-row items-center">
-                  <Ionicons name="footsteps" size={16} color="#f43f5e" />
-                  <Text className="text-zinc-300 text-xs ml-1">{workout.steps.toLocaleString()} steps</Text>
-                </View>
-                <View className="flex-row items-center">
-                  <Ionicons name="flame-outline" size={16} color="#f43f5e" />
-                  <Text className="text-zinc-300 text-xs ml-1">{workout.calories} kcal</Text>
-                </View>
-              </View>
+        {/* Stats row */}
+        <View style={styles.statsRow}>
+          {[
+            { label: 'Days/week', value: `${catalog.workoutDaysPerWeek ?? '—'}x` },
+            { label: 'Session', value: `${catalog.sessionDuration ?? '—'}m` },
+            { label: 'Location', value: catalog.workoutLocation ?? '—' },
+          ].map(s => (
+            <View key={s.label} style={styles.statCard}>
+              <Text style={styles.statValue}>{s.value}</Text>
+              <Text style={styles.statLabel}>{s.label}</Text>
             </View>
           ))}
         </View>
 
-        {/* Body Measurements */}
-        {/* Replaced <Animated.View entering={FadeInDown...}> */}
-        <View className="px-5 mb-8">
-          {renderSectionHeader('Body Measurements', 'Track your progress', null)}
-          <View className="bg-zinc-900 rounded-2xl p-5 shadow-lg shadow-black/30">
-            <View className="flex-row justify-between mb-4">
-              <View className="w-1/2 pr-2">
-                <Text className="text-zinc-400 text-xs mb-1">Weight</Text>
-                <View className="flex-row items-baseline">
-                  <Text className="text-white text-lg font-bold">72.5</Text>
-                  <Text className="text-zinc-400 text-xs ml-1">kg</Text>
-                  <View className="flex-row items-center ml-2">
-                    <Ionicons name="arrow-down" size={14} color="#10B981" />
-                    <Text className="text-green-500 text-xs">1.2</Text>
-                  </View>
-                </View>
-              </View>
-              <View className="w-1/2 pl-2 border-l border-zinc-800">
-                <Text className="text-zinc-400 text-xs mb-1">Body Fat</Text>
-                <View className="flex-row items-baseline">
-                  <Text className="text-white text-lg font-bold">18.2</Text>
-                  <Text className="text-zinc-400 text-xs ml-1">%</Text>
-                  <View className="flex-row items-center ml-2">
-                    <Ionicons name="arrow-down" size={14} color="#10B981" />
-                    <Text className="text-green-500 text-xs">0.8</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            <View className="flex-row justify-between pt-4 border-t border-zinc-800">
-              <View className="w-1/3">
-                <Text className="text-zinc-400 text-xs mb-1">Chest</Text>
-                <Text className="text-white text-sm">95 cm</Text>
-              </View>
-              <View className="w-1/3">
-                <Text className="text-zinc-400 text-xs mb-1">Waist</Text>
-                <Text className="text-white text-sm">82 cm</Text>
-              </View>
-              <View className="w-1/3">
-                <Text className="text-zinc-400 text-xs mb-1">Arms</Text>
-                <Text className="text-white text-sm">36 cm</Text>
-              </View>
-            </View>
+        {/* Progress badge */}
+        <View style={{ paddingHorizontal: 20, marginTop: 8 }}>
+          <View style={styles.progressBadge}>
+            <Ionicons name="calendar-outline" size={14} color="#A78BFA" />
+            <Text style={styles.progressBadgeText}>
+              Week {currentWeek} of {catalog.durationWeeks ?? '?'} · Day {currentDay}
+            </Text>
           </View>
         </View>
 
+        {/* Today's workout */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
+            {todayData?.isRestDay ? 'Today — Rest Day' : `Today — ${todayData?.focus ?? 'Workout'}`}
+          </Text>
+          {todayData && !todayData.isRestDay ? (
+            <>
+              <View style={styles.focusBadge}>
+                <Ionicons name="flame-outline" size={14} color="#A78BFA" />
+                <Text style={styles.focusBadgeText}>{todayData.focus}</Text>
+              </View>
+              {(todayData.exercises ?? []).map((ex: any, i: number) => (
+                <View key={i} style={styles.exerciseRow}>
+                  <View style={styles.exerciseNum}>
+                    <Text style={styles.exerciseNumText}>{i + 1}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.exerciseName}>{ex.name}</Text>
+                    <Text style={styles.exerciseMeta}>
+                      {ex.sets ? `${ex.sets} sets` : ''}
+                      {ex.reps ? ` · ${ex.reps} reps` : ''}
+                      {ex.duration ? ` · ${ex.duration}` : ''}
+                    </Text>
+                    {ex.description ? <Text style={styles.exerciseDesc}>{ex.description}</Text> : null}
+                  </View>
+                </View>
+              ))}
+            </>
+          ) : (
+            <View style={styles.restDay}>
+              <Ionicons name="moon-outline" size={32} color="#333" />
+              <Text style={styles.restDayText}>Rest day — recover & recharge</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Weekly overview — show current week days */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Week {currentWeek} overview</Text>
+          <View style={styles.weekGrid}>
+            {currentWeekDays.map((day: any) => {
+              const isActive = day.dayNumber === currentDay;
+              return (
+                <View key={day.dayNumber} style={[styles.weekDayCard, isActive && styles.weekDayCardActive]}>
+                  <Text style={[styles.weekDayCardNum, isActive && { color: '#A78BFA' }]}>Day {day.dayNumber}</Text>
+                  <Text style={[styles.weekDayCardFocus, isActive && { color: '#fff' }]} numberOfLines={1}>
+                    {day.isRestDay ? 'Rest' : day.focus}
+                  </Text>
+                  {isActive && <View style={styles.weekDayActiveDot} />}
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Full plan — all weeks */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Full program</Text>
+          {(catalog.weeks ?? []).map((week: any) => (
+            <View key={week.weekNumber} style={{ marginBottom: 16 }}>
+              <Text style={styles.weekLabel}>Week {week.weekNumber}</Text>
+              {(week.days ?? []).map((day: any) => (
+                <View key={day.dayNumber} style={styles.fullDayCard}>
+                  <View style={styles.fullDayHeader}>
+                    <Text style={styles.fullDayName}>Day {day.dayNumber}</Text>
+                    <Text style={styles.fullDayFocus}>{day.isRestDay ? 'Rest' : day.focus}</Text>
+                  </View>
+                  {!day.isRestDay && (day.exercises ?? []).map((ex: any, j: number) => (
+                    <Text key={j} style={styles.fullDayExercise}>
+                      • {ex.name}{ex.sets ? `  ${ex.sets}×${ex.reps}` : ''}{ex.duration ? `  ${ex.duration}` : ''}
+                    </Text>
+                  ))}
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
-};
+}
 
-export default FitnessProgressScreen;
+// ─── Styles ────────────────────────────────────────────────────────────────────
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
+  backBtn: { marginRight: 12, padding: 4 },
+  headerTitle: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  headerSub: { color: '#666', fontSize: 13, marginTop: 2 },
+  stepIndicator: { color: '#555', fontSize: 13 },
+
+  progressTrack: { height: 3, backgroundColor: '#1A1A1A', marginHorizontal: 20, borderRadius: 2 },
+  progressFill: { height: '100%', backgroundColor: '#A78BFA', borderRadius: 2 },
+
+  scrollContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 120 },
+
+  stepTitle: { color: '#fff', fontSize: 24, fontWeight: '800', marginBottom: 8 },
+  stepSub: { color: '#666', fontSize: 14, marginBottom: 24 },
+  sectionLabel: { color: '#aaa', fontSize: 13, fontWeight: '600', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.8 },
+  emptyText: { color: '#555', fontSize: 14, marginTop: 12, textAlign: 'center' },
+
+  // Option card (level)
+  optionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#222' },
+  optionCardSelected: { borderColor: '#A78BFA' },
+  optionIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1A1A1A', justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  optionIconSelected: { backgroundColor: '#A78BFA' },
+  optionLabel: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  optionDesc: { color: '#666', fontSize: 13, marginTop: 2 },
+
+  // Goal grid
+  goalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  goalCard: { width: '47%', backgroundColor: '#111', borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#222', gap: 10 },
+  goalCardSelected: { borderColor: '#A78BFA', backgroundColor: '#1A1218' },
+  goalLabel: { color: '#888', fontSize: 13, fontWeight: '600', textAlign: 'center' },
+
+  // Pills
+  pillRow: { flexDirection: 'row', gap: 10 },
+  pill: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 30, backgroundColor: '#111', borderWidth: 1, borderColor: '#222' },
+  pillSelected: { backgroundColor: '#A78BFA', borderColor: '#A78BFA' },
+  pillText: { color: '#666', fontWeight: '600' },
+  pillTextSelected: { color: '#fff' },
+
+  // Location
+  locRow: { flexDirection: 'row', gap: 10 },
+  locCard: { flex: 1, backgroundColor: '#111', borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#222', gap: 8 },
+  locCardSelected: { borderColor: '#A78BFA', backgroundColor: '#1A1218' },
+  locLabel: { color: '#888', fontSize: 13, fontWeight: '600' },
+
+  // Chips
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#111', borderWidth: 1, borderColor: '#222' },
+  chipSelected: { backgroundColor: '#A78BFA22', borderColor: '#A78BFA' },
+  chipText: { color: '#888', fontSize: 13 },
+  chipTextSelected: { color: '#A78BFA' },
+
+  // Inputs
+  inputRow: { flexDirection: 'row', gap: 12 },
+  inputHalf: { flex: 1 },
+  inputLabel: { color: '#aaa', fontSize: 12, fontWeight: '600', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  input: { backgroundColor: '#111', borderRadius: 12, borderWidth: 1, borderColor: '#222', color: '#fff', fontSize: 16, paddingHorizontal: 16, paddingVertical: 14 },
+
+  // Plan cards
+  planCard: { backgroundColor: '#111', borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#222' },
+  planCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  planCardTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  planCardMeta: { color: '#666', fontSize: 13, marginTop: 4 },
+  planBadge: { backgroundColor: '#1A1A1A', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  planBadgeText: { color: '#A78BFA', fontSize: 12, fontWeight: '600', textTransform: 'capitalize' },
+  planDay: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#1A1A1A' },
+  planDayName: { color: '#aaa', fontSize: 13, fontWeight: '600' },
+  planDayFocus: { color: '#555', fontSize: 13 },
+  planMore: { color: '#555', fontSize: 12, marginTop: 8, textAlign: 'center' },
+  subscribeBtn: { backgroundColor: '#A78BFA', borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 16 },
+  subscribeBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+
+  // Footer
+  footer: { padding: 20, paddingBottom: 32, backgroundColor: '#0A0A0A', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#1A1A1A' },
+  nextBtn: { backgroundColor: '#A78BFA', borderRadius: 16, paddingVertical: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  nextBtnDisabled: { backgroundColor: '#2A2A2A' },
+  nextBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  // Active plan view
+  changeBtn: { backgroundColor: '#1A1A1A', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  changeBtnText: { color: '#A78BFA', fontSize: 13, fontWeight: '600' },
+  statsRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 10, marginBottom: 8 },
+  statCard: { flex: 1, backgroundColor: '#111', borderRadius: 14, padding: 14, alignItems: 'center' },
+  statValue: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  statLabel: { color: '#555', fontSize: 11, marginTop: 4 },
+
+  section: { paddingHorizontal: 20, marginTop: 24 },
+  sectionTitle: { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 16 },
+  focusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 },
+  focusBadgeText: { color: '#A78BFA', fontSize: 14, fontWeight: '600' },
+
+  exerciseRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', borderRadius: 14, padding: 14, marginBottom: 8 },
+  exerciseNum: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#A78BFA22', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  exerciseNumText: { color: '#A78BFA', fontSize: 13, fontWeight: '800' },
+  exerciseName: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  exerciseMeta: { color: '#555', fontSize: 12, marginTop: 3 },
+
+  restDay: { alignItems: 'center', padding: 32, gap: 12, backgroundColor: '#111', borderRadius: 16 },
+  restDayText: { color: '#555', fontSize: 14 },
+
+  weekRow: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#111', borderRadius: 16, padding: 14 },
+  weekDay: { alignItems: 'center', flex: 1, gap: 8, position: 'relative' },
+  weekDayToday: {},
+  weekDayName: { color: '#555', fontSize: 11, fontWeight: '600' },
+  weekDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#333' },
+  weekDotActive: { backgroundColor: '#A78BFA' },
+  weekDotRest: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#1A1A1A' },
+  weekTodayLine: { position: 'absolute', bottom: -14, width: 4, height: 4, borderRadius: 2, backgroundColor: '#A78BFA' },
+
+  fullDayCard: { backgroundColor: '#111', borderRadius: 14, padding: 14, marginBottom: 10 },
+  fullDayHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  fullDayName: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  fullDayFocus: { color: '#A78BFA', fontSize: 13 },
+  fullDayExercise: { color: '#666', fontSize: 13, marginTop: 3 },
+
+  // Goal tags on plan cards
+  goalTag: { backgroundColor: '#A78BFA22', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: '#A78BFA44' },
+  goalTagText: { color: '#A78BFA', fontSize: 12, fontWeight: '600' },
+  planDescription: { color: '#666', fontSize: 13, marginTop: 8, lineHeight: 18 },
+
+  // Active plan progress badge
+  progressBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#A78BFA22', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#A78BFA44' },
+  progressBadgeText: { color: '#A78BFA', fontSize: 13, fontWeight: '600' },
+
+  exerciseDesc: { color: '#444', fontSize: 12, marginTop: 2 },
+
+  // Week grid in active plan view
+  weekGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  weekDayCard: { width: '30%', backgroundColor: '#111', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: '#222', alignItems: 'center' },
+  weekDayCardActive: { borderColor: '#A78BFA', backgroundColor: '#1A1218' },
+  weekDayCardNum: { color: '#555', fontSize: 11, fontWeight: '700', marginBottom: 4 },
+  weekDayCardFocus: { color: '#666', fontSize: 12, textAlign: 'center' },
+  weekDayActiveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#A78BFA', marginTop: 6 },
+
+  weekLabel: { color: '#A78BFA', fontSize: 13, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.8 },
+});

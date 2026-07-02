@@ -48,6 +48,8 @@ const SwipeCard = React.forwardRef<
   const position = useRef(new Animated.ValueXY()).current;
   const likeOpacity = useRef(new Animated.Value(0)).current;
   const nopeOpacity = useRef(new Animated.Value(0)).current;
+  const isTopRef = useRef(isTop);
+  isTopRef.current = isTop;
 
   const rotate = position.x.interpolate({
     inputRange: [-width / 2, 0, width / 2],
@@ -77,8 +79,8 @@ const SwipeCard = React.forwardRef<
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => isTop,
-      onMoveShouldSetPanResponder: () => isTop,
+      onStartShouldSetPanResponder: () => isTopRef.current,
+      onMoveShouldSetPanResponder: () => isTopRef.current,
       onPanResponderMove: (_, gesture) => {
         position.setValue({ x: gesture.dx, y: gesture.dy * 0.3 });
         if (gesture.dx > 0) {
@@ -160,17 +162,25 @@ const SwipeCard = React.forwardRef<
 });
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
+const SWIPED_IDS_KEY = "gymbuddy_swiped_ids";
+
 const GymBuddyScreen = () => {
   const [gymBuddies, setGymBuddies] = useState<GymBuddy[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const swipedIds = useRef<Set<string>>(new Set());
 
   // Ref pointing to the current top card
   const topCardRef = useRef<SwipeCardRef>(null);
 
   useEffect(() => {
-    const fetchGymBuddies = async () => {
+    const init = async () => {
       try {
+        const stored = await AsyncStorage.getItem(SWIPED_IDS_KEY);
+        if (stored) {
+          swipedIds.current = new Set(JSON.parse(stored));
+        }
+
         const token = await AsyncStorage.getItem("authToken");
         if (!token) throw new Error("Token not found");
 
@@ -183,16 +193,18 @@ const GymBuddyScreen = () => {
         const result = await response.json();
         const profiles = result.data || [];
 
-        const transformed: GymBuddy[] = profiles.map((p: any) => ({
-          id: p._id,
-          user: p.user,
-          name: p.firstName || "Unknown",
-          age: new Date().getFullYear() - new Date(p.dateOfBirth).getFullYear(),
-          distance: `${Math.floor(Math.random() * 10) + 1} km`,
-          bio: p.bio || "Let's work out together!",
-          image: p.imageUrl?.[0] || "https://via.placeholder.com/400",
-          tags: p.interests?.slice(0, 3).map((i: any) => i.name) || ["Fitness"],
-        }));
+        const transformed: GymBuddy[] = profiles
+          .map((p: any) => ({
+            id: p._id,
+            user: p.user?._id ?? p.user,
+            name: p.firstName || "Unknown",
+            age: new Date().getFullYear() - new Date(p.dateOfBirth).getFullYear(),
+            distance: `${Math.floor(Math.random() * 10) + 1} km`,
+            bio: p.bio || "Let's work out together!",
+            image: p.imageUrl?.[0] || "https://via.placeholder.com/400",
+            tags: p.interests?.slice(0, 3).map((i: any) => i.name) || ["Fitness"],
+          }))
+          .filter((p: GymBuddy) => !swipedIds.current.has(p.user) && !swipedIds.current.has(p.id));
 
         setGymBuddies(transformed);
       } catch (error) {
@@ -203,7 +215,7 @@ const GymBuddyScreen = () => {
       }
     };
 
-    fetchGymBuddies();
+    init();
   }, []);
 
   const handleSwipe = useCallback(
@@ -218,20 +230,30 @@ const GymBuddyScreen = () => {
         if (!token) throw new Error("Token not found");
 
         const decoded = decodeJWT(token);
-        const swiperId = decoded?.id || decoded?._id;
+        const swiperId = decoded?.id || decoded?._id || decoded?.userId || decoded?.sub;
 
-        const response = await fetch(`${API_URL}/api/v1/swipeUser/swipes`, {
+        if (!swiperId) {
+          console.error("decodeJWT payload:", decoded);
+          Alert.alert("Auth Error", "Could not read user ID from token. Check console for JWT payload.");
+          return;
+        }
+
+        const swipedId = swipedUser.id; // UserProfile._id — what the Swipe model expects
+        const swipeResponse = await fetch(`${API_URL}/api/v1/swipeUser/swipes`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ swiperId, swipedId: swipedUser.user, direction }),
+          body: JSON.stringify({ swiperId, swipedId, direction }),
         });
 
-        if (!response.ok) {
-          const err = await response.json();
-          console.error("Failed to save swipe:", err);
+        if (swipeResponse.ok) {
+          swipedIds.current.add(swipedId);
+          await AsyncStorage.setItem(SWIPED_IDS_KEY, JSON.stringify([...swipedIds.current]));
+        } else {
+          const err = await swipeResponse.json();
+          console.error("Swipe API error:", err);
         }
       } catch (error) {
         console.error("Swipe API Error:", error);
@@ -262,6 +284,42 @@ const GymBuddyScreen = () => {
         <View style={styles.centered}>
           <Ionicons name="people-outline" size={64} color="#555" />
           <Text style={styles.messageText}>No more buddies to show!</Text>
+          <TouchableOpacity
+            onPress={async () => {
+              await AsyncStorage.removeItem(SWIPED_IDS_KEY);
+              swipedIds.current = new Set();
+              setCurrentIndex(0);
+              setLoading(true);
+              try {
+                const token = await AsyncStorage.getItem("authToken");
+                const response = await fetch(`${API_URL}/api/v1/user-profile?page=1&limit=10`, {
+                  method: "GET",
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                const result = await response.json();
+                const profiles = result.data || [];
+                setGymBuddies(
+                  profiles.map((p: any) => ({
+                    id: p._id,
+                    user: p.user?._id ?? p.user,
+                    name: p.firstName || "Unknown",
+                    age: new Date().getFullYear() - new Date(p.dateOfBirth).getFullYear(),
+                    distance: `${Math.floor(Math.random() * 10) + 1} km`,
+                    bio: p.bio || "Let's work out together!",
+                    image: p.imageUrl?.[0] || "https://via.placeholder.com/400",
+                    tags: p.interests?.slice(0, 3).map((i: any) => i.name) || ["Fitness"],
+                  }))
+                );
+              } catch (e) {
+                Alert.alert("Error", "Failed to reload profiles.");
+              } finally {
+                setLoading(false);
+              }
+            }}
+            style={{ marginTop: 16, backgroundColor: "#333", borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 }}
+          >
+            <Text style={{ color: "#fff", fontSize: 14 }}>Refresh Buddies</Text>
+          </TouchableOpacity>
         </View>
       )}
 
