@@ -51,11 +51,17 @@ const categories = [
   },
 ];
 
-const CategoryGrid: React.FC = () => {
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+type Props = {
+  onSelect?: (label: string | null) => void;
+};
 
-  const handleSelect = (id: string) => {
-    setSelectedCategory((prev) => (prev === id ? null : id));
+const CategoryGrid: React.FC<Props> = ({ onSelect }) => {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const handleSelect = (id: string, label: string) => {
+    const next = selectedId === id ? null : id;
+    setSelectedId(next);
+    onSelect?.(next === null ? null : label);
   };
 
   return (
@@ -75,7 +81,7 @@ const CategoryGrid: React.FC = () => {
     }}
     ItemSeparatorComponent={() => <View style={{ width: 12 }} />}
     renderItem={({ item }) => {
-      const isSelected = selectedCategory === item.id;
+      const isSelected = selectedId === item.id;
 
       return (
         <TouchableOpacity
@@ -90,7 +96,7 @@ const CategoryGrid: React.FC = () => {
             backgroundColor: '#23262B',
           }}
           activeOpacity={0.85}
-          onPress={() => handleSelect(item.id)}
+          onPress={() => handleSelect(item.id, item.label)}
         >
           <View
             style={{

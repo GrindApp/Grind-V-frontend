@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useUnreadMessages } from "@/context/UnreadMessagesContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { Ionicons } from "@expo/vector-icons";
@@ -32,6 +33,7 @@ export default function ChatPage() {
   const [initializing, setInitializing] = useState(true);
   const [otherUser, setOtherUser] = useState<any>(null);
   const flatListRef = useRef<FlatList>(null);
+  const { markAsRead } = useUnreadMessages();
 
   const normalizeId = (id: any): string => {
     if (typeof id === "object" && id !== null) return id._id || id.id || String(id);
@@ -70,12 +72,13 @@ export default function ChatPage() {
           (f: any) => f._id === friendshipId
         );
         if (friendship) {
-          const other =
-            friendship.user1?.user === userId ? friendship.user2 : friendship.user1;
+          const user1Id = friendship.user1?.user?._id?.toString() ?? friendship.user1?.user?.toString();
+          const other = user1Id === userId ? friendship.user2 : friendship.user1;
           setOtherUser(other);
         }
 
         setMessages(dedupeMessages(messagesRes.data));
+        markAsRead(String(friendshipId));
       } catch (e) {
         console.error("Error initializing chat:", e);
       } finally {
@@ -98,7 +101,9 @@ export default function ChatPage() {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.data.length !== messages.length) setMessages(dedupeMessages(res.data));
-      } catch (_) {}
+      } catch (err) {
+        console.error("Chat polling error:", err);
+      }
     };
 
     const interval = setInterval(poll, 3000);
@@ -272,7 +277,7 @@ export default function ChatPage() {
       >
         {initializing ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator color="#A78BFA" size="large" />
+            <ActivityIndicator color="#EF4444" size="large" />
           </View>
         ) : (
           <FlatList
@@ -325,7 +330,7 @@ export default function ChatPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0A0A0A",
+    backgroundColor: "#09090B",
   },
 
   // Header
@@ -334,9 +339,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: "#111",
+    backgroundColor: "#09090B",
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#222",
+    borderBottomColor: "#27272A",
   },
   backBtn: {
     padding: 4,
@@ -360,7 +365,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: "#34C759",
     borderWidth: 2,
-    borderColor: "#111",
+    borderColor: "#09090B",
   },
   headerInfo: {
     flex: 1,
@@ -411,7 +416,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
   },
   avatarFallback: {
-    backgroundColor: "#A78BFA",
+    backgroundColor: "#EF4444",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -429,12 +434,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   bubbleMe: {
-    backgroundColor: "#A78BFA",
+    backgroundColor: "#EF4444",
     borderBottomRightRadius: 5,
     alignSelf: "flex-end",
   },
   bubbleThem: {
-    backgroundColor: "#1E1E1E",
+    backgroundColor: "#1C1C1E",
     borderBottomLeftRadius: 5,
     alignSelf: "flex-start",
   },
@@ -463,9 +468,9 @@ const styles = StyleSheet.create({
     marginVertical: 16,
   },
   dateDividerText: {
-    color: "#444",
+    color: "#71717A",
     fontSize: 12,
-    backgroundColor: "#181818",
+    backgroundColor: "#18181B",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 10,
@@ -487,7 +492,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   avatarFallbackLarge: {
-    backgroundColor: "#A78BFA",
+    backgroundColor: "#EF4444",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -513,17 +518,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     paddingBottom: Platform.OS === "ios" ? 10 : 10,
-    backgroundColor: "#111",
+    backgroundColor: "#09090B",
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#222",
+    borderTopColor: "#27272A",
     gap: 8,
   },
   inputWrapper: {
     flex: 1,
-    backgroundColor: "#1C1C1E",
+    backgroundColor: "#18181B",
     borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#333",
+    borderColor: "#3F3F46",
     paddingHorizontal: 16,
     paddingVertical: 10,
     maxHeight: 120,
@@ -538,11 +543,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#A78BFA",
+    backgroundColor: "#EF4444",
     justifyContent: "center",
     alignItems: "center",
   },
   sendBtnDisabled: {
-    backgroundColor: "#2A2A2A",
+    backgroundColor: "#27272A",
   },
 });

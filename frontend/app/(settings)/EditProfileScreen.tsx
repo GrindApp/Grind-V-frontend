@@ -7,8 +7,8 @@ import {
   Image,
   ScrollView,
   Alert,
-  ActivityIndicator,
 } from "react-native";
+import { SkeletonBox } from "@/app/components/SkeletonBox";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, Feather, MaterialIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -21,7 +21,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const EditProfileScreen = () => {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [profileId, setProfileId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [formDataState, setFormData] = useState({
     fullName: "",
@@ -41,15 +41,16 @@ const EditProfileScreen = () => {
         const token = await AsyncStorage.getItem("authToken");
         if (!token) throw new Error("Token not found");
         const decoded = decodeJWT(token);
-        const userId = decoded?.id || decoded?._id;
-        if (!userId) throw new Error("User ID not found");
+        const uid = decoded?.id || decoded?._id;
+        if (!uid) throw new Error("User ID not found");
+        setUserId(uid);
 
         const [profileRes, userRes] = await Promise.all([
-          fetch(`${API_URL}/api/v1/userProfile/user/${userId}`, {
+          fetch(`${API_URL}/api/v1/userProfile/user/${uid}`, {
             method: "GET",
             headers: { Authorization: `Bearer ${token}` },
           }),
-          fetch(`${API_URL}/api/v1/user/${userId}`, {
+          fetch(`${API_URL}/api/v1/user/${uid}`, {
             method: "GET",
             headers: { Authorization: `Bearer ${token}` },
           }),
@@ -65,7 +66,6 @@ const EditProfileScreen = () => {
 
         const userProfile = profileJson.data;
         const userAccount = userJson.data;
-        setProfileId(userProfile._id);
 
         setFormData({
           fullName: `${userProfile.firstName} ${userProfile.lastName}`,
@@ -110,27 +110,54 @@ const EditProfileScreen = () => {
     }
   };
 
+  const isLocalUri = (uri: string) =>
+    uri.startsWith("file://") || uri.startsWith("content://") || uri.startsWith("/");
+
   const handleSaveChanges = async () => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem("authToken");
       if (!token) throw new Error("Token not found");
-      if (!profileId) throw new Error("Profile ID not found");
+      if (!userId) throw new Error("User ID not found");
 
-      const body = {
-        bio: formDataState.bio,
-        imageUrl: [profileImage, grindImage].filter(Boolean), // optional
-      };
+      const formData = new FormData();
+      formData.append("bio", formDataState.bio);
+
+      // Profile image — file if local, text field if existing URL
+      if (profileImage) {
+        if (isLocalUri(profileImage)) {
+          formData.append("profileImage", {
+            uri: profileImage,
+            type: "image/jpeg",
+            name: "profile.jpg",
+          } as any);
+        } else {
+          formData.append("existingProfileUrl", profileImage);
+        }
+      }
+
+      // Grind image — file if local, text field if existing URL
+      if (grindImage) {
+        if (isLocalUri(grindImage)) {
+          formData.append("grindImage", {
+            uri: grindImage,
+            type: "image/jpeg",
+            name: "grind.jpg",
+          } as any);
+        } else {
+          formData.append("existingGrindUrl", grindImage);
+        }
+      }
 
       const res = await fetch(
-        `${API_URL}/api/v1/userProfile/user/${profileId}`,
+        `${API_URL}/api/v1/userProfile/user/${userId}`,
         {
           method: "PUT",
           headers: {
             Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json", // ✅ Important for JSON
+            // Do NOT set Content-Type — fetch sets it automatically with the correct boundary for FormData
           },
-          body: JSON.stringify(body),
+          body: formData,
         }
       );
 
@@ -148,9 +175,37 @@ const EditProfileScreen = () => {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-primary justify-center items-center">
-        <ActivityIndicator size="large" color="#fff" />
-        <Text className="text-white mt-4">Loading Profile...</Text>
+      <SafeAreaView className="flex-1 bg-primary">
+        <ScrollView showsVerticalScrollIndicator={false} className="px-5">
+          {/* Header */}
+          <View className="flex-row items-center mb-4 space-x-4 mt-2">
+            <SkeletonBox width={34} height={34} borderRadius={17} />
+            <SkeletonBox width={140} height={28} borderRadius={8} />
+          </View>
+
+          {/* Avatar circles */}
+          <View className="flex-row justify-around mb-10">
+            {[0, 1].map((i) => (
+              <View key={i} className="items-center">
+                <SkeletonBox width={128} height={128} borderRadius={64} style={{ marginBottom: 8 }} />
+                <SkeletonBox width={80} height={14} borderRadius={6} />
+              </View>
+            ))}
+          </View>
+
+          {/* Form fields */}
+          <View style={{ backgroundColor: "#1C1C1E", borderRadius: 16, padding: 12, marginBottom: 24 }}>
+            {["Full Name", "Username", "Bio"].map((_, i) => (
+              <View key={i} style={{ marginBottom: i < 2 ? 24 : 0 }}>
+                <SkeletonBox width={90} height={14} borderRadius={6} style={{ marginBottom: 8 }} />
+                <SkeletonBox height={48} borderRadius={12} />
+              </View>
+            ))}
+          </View>
+
+          {/* Save button */}
+          <SkeletonBox height={52} borderRadius={12} style={{ marginTop: 24 }} />
+        </ScrollView>
       </SafeAreaView>
     );
   }

@@ -1,275 +1,207 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import GymCard from "../components/GymCard";
-import { Alert, FlatList, TouchableOpacity, View, Text, Image, ScrollView } from "react-native";
+import {
+  Alert,
+  FlatList,
+  TouchableOpacity,
+  View,
+  Text,
+  RefreshControl,
+  Dimensions,
+} from "react-native";
+import { SkeletonBox } from "@/app/components/SkeletonBox";
 import { Ionicons } from "@expo/vector-icons";
-// import Animated, { FadeIn, FadeInRight } from "react-native-reanimated"; // ❌ NOT compatible with Expo Go — requires custom native build
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { decodeJWT } from "@/utils/jwt";
 
-interface Gym {
-  id: string;
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
+
+type GymType = {
+  _id: string;
   name: string;
-  address: string;
-  distance: string;
-  image: any;
-  tags: string[];
-  rating: string;
-}
-
-interface Exercise {
-  id: string;
-  name: string;
-  image: any;
-  duration: string;
-  difficulty: string;
-  category: string;
-}
-
-const initialGyms: Gym[] = [
-  {
-    id: "101",
-    name: "Iron Paradise",
-    address: "Sector 21, Dwarka, New Delhi",
-    distance: "450 meters away",
-    image: { uri: "https://source.unsplash.com/1600x900/?gym,weights" },
-    tags: ["Yoga", "Zumba", "Pilates"],
-    rating: "4.8",
-  },
-  {
-    id: "102",
-    name: "Flex Gym & Fitness",
-    address: "Rajouri Garden, New Delhi",
-    distance: "300 meters away",
-    image: { uri: "https://source.unsplash.com/1600x900/?gym,fitness" },
-    tags: ["Yoga", "Zumba", "Pilates"],
-    rating: "4.6",
-  },
-];
-
-const initialExercises: Exercise[] = [
-  {
-    id: "201",
-    name: "Hamstring Stretch",
-    image: { uri: "https://source.unsplash.com/1600x900/?stretch,hamstring" },
-    duration: "2-3 minutes",
-    difficulty: "Intermediate",
-    category: "Stretching",
-  },
-  {
-    id: "202",
-    name: "Back Stretches",
-    image: { uri: "https://source.unsplash.com/1600x900/?stretch,back" },
-    duration: "3-5 minutes",
-    difficulty: "Beginner",
-    category: "Stretching",
-  },
-  {
-    id: "203",
-    name: "Neck Stretches",
-    image: { uri: "https://source.unsplash.com/1600x900/?stretch,neck" },
-    duration: "2 minutes",
-    difficulty: "Beginner",
-    category: "Stretching",
-  },
-];
-
-type TabType = "gyms" | "exercises";
+  address?: string;
+  location?: string;
+  imageUrls?: string[];
+  rating?: number;
+  amenities?: string[];
+};
 
 const SavedGyms = () => {
-  const [activeTab, setActiveTab] = useState<TabType>("gyms");
-  const [gyms, setGyms] = useState<Gym[]>(initialGyms);
-  const [exercises, setExercises] = useState<Exercise[]>(initialExercises);
+  const [gyms, setGyms] = useState<GymType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
-  const handleUnsaveGym = (id: string) => {
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const tok = await AsyncStorage.getItem("authToken");
+        if (!tok) return;
+        setToken(tok);
+        const decoded = decodeJWT(tok) as any;
+        const uid = decoded?.id || decoded?._id;
+        if (!uid) return;
+        setUserId(uid);
+        await loadGyms(uid, tok);
+      } catch (err) {
+        console.error("savedGym init error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
+  }, []);
+
+  const loadGyms = async (uid: string, tok: string) => {
+    try {
+      const res = await fetch(
+        `${API_URL}/api/v1/userProfile/user/${uid}/favorite-gyms`,
+        { headers: { Authorization: `Bearer ${tok}` } }
+      );
+      const json = await res.json();
+      if (json.success) setGyms(json.data || []);
+    } catch (err) {
+      console.error("Failed to load saved gyms:", err);
+    }
+  };
+
+  const onRefresh = useCallback(async () => {
+    if (!userId || !token) return;
+    setRefreshing(true);
+    await loadGyms(userId, token);
+    setRefreshing(false);
+  }, [userId, token]);
+
+  const handleUnsave = (gymId: string) => {
     Alert.alert(
       "Remove Gym",
-      "Are you sure you want to remove this gym from your saved list?",
+      "Remove this gym from your OG Collection?",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Remove",
           style: "destructive",
-          onPress: () => setGyms((prev) => prev.filter((gym) => gym.id !== id)),
+          onPress: async () => {
+            setGyms((prev) => prev.filter((g) => g._id !== gymId));
+            try {
+              await fetch(
+                `${API_URL}/api/v1/userProfile/user/${userId}/favorite-gym/${gymId}`,
+                {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${token}` },
+                }
+              );
+            } catch {}
+          },
         },
       ]
     );
   };
 
-  const handleUnsaveExercise = (id: string) => {
-    Alert.alert(
-      "Remove Exercise",
-      "Are you sure you want to remove this exercise from your bookmarks?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () =>
-            setExercises((prev) => prev.filter((ex) => ex.id !== id)),
-        },
-      ]
-    );
-  };
+  const cardWidth = Dimensions.get("window").width - 32;
 
-  const renderExerciseItem = ({ item }: { item: Exercise }) => (
-    // Replaced <Animated.View entering={FadeInRight...}> with plain <View>
-    // react-native-reanimated animations (FadeIn, FadeInRight, etc.) require
-    // a custom native build and do NOT work in Expo Go.
-    <View>
-      <TouchableOpacity
-        className="flex-row bg-zinc-800 rounded-xl mx-4 mb-3 overflow-hidden shadow-md shadow-black/40"
-        activeOpacity={0.7}
-        // onPress={() => router.push(`/exercise-details/${item.id}`)}
-      >
-        <Image source={item.image} className="w-24 h-24" resizeMode="cover" />
-        <View className="flex-1 p-3 justify-between">
-          <View>
-            <Text className="text-white font-semibold text-base">
-              {item.name}
-            </Text>
-            <Text className="text-gray-400 text-xs mt-1">{item.category}</Text>
-          </View>
-
-          <View className="flex-row justify-between items-center mt-2">
-            <View className="flex-row items-center">
-              <Ionicons name="time-outline" size={12} color="#f43f5e" />
-              <Text className="text-gray-300 text-xs ml-1">{item.duration}</Text>
-              <View className="h-1.5 w-1.5 bg-gray-600 rounded-full mx-2" />
-              <Text className="text-gray-300 text-xs">{item.difficulty}</Text>
-            </View>
-
-            <TouchableOpacity
-              onPress={() => handleUnsaveExercise(item.id)}
-              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-            >
-              <Ionicons name="bookmark" size={18} color="#f43f5e" />
-            </TouchableOpacity>
-          </View>
+  if (loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-primary">
+        {/* Header */}
+        <View className="flex-row items-center px-5 pt-6 pb-4 space-x-4">
+          <SkeletonBox width={34} height={34} borderRadius={17} />
+          <SkeletonBox width={160} height={28} borderRadius={8} style={{ marginLeft: 8 }} />
         </View>
-      </TouchableOpacity>
-    </View>
-  );
+
+        {[0, 1, 2].map((i) => (
+          <View
+            key={i}
+            style={{
+              marginHorizontal: 16,
+              marginBottom: 32,
+              borderRadius: 24,
+              overflow: "hidden",
+              backgroundColor: "#1C1C1E",
+            }}
+          >
+            <SkeletonBox width={cardWidth} height={220} borderRadius={0} />
+            <View style={{ padding: 20 }}>
+              <SkeletonBox height={22} borderRadius={6} style={{ marginBottom: 12 }} />
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <SkeletonBox width={80} height={14} borderRadius={5} />
+                <SkeletonBox width={60} height={14} borderRadius={5} />
+              </View>
+            </View>
+          </View>
+        ))}
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-primary">
-      <ScrollView className="flex-1 px-5 py-6">
-        {/* Header with back button */}
-        <View className="flex-row items-center mb-6 space-x-4">
-          <TouchableOpacity
-            onPress={() => router.back()}
-            className="p-2 bg-zinc-800/80 rounded-full"
-            activeOpacity={0.7}
-          >
-            <Ionicons name="chevron-back" size={18} color="white" />
-          </TouchableOpacity>
+      {/* Header — keeps horizontal padding */}
+      <View className="flex-row items-center px-5 pt-6 pb-4 space-x-4">
+        <TouchableOpacity
+          onPress={() => router.back()}
+          className="p-2 bg-zinc-800/80 rounded-full"
+          activeOpacity={0.7}
+        >
+          <Ionicons name="chevron-back" size={18} color="white" />
+        </TouchableOpacity>
+        <Text className="text-white text-2xl ml-2 font-bold">OG Collection</Text>
+      </View>
 
-          <Text className="text-white text-2xl ml-2 font-bold">Saved</Text>
-        </View>
-
-        {/* Tabs */}
-        <View className="flex-row px-4 mb-3">
-          <View className="flex-row bg-zinc-800 rounded-xl p-1 w-full">
-            {[
-              { id: "gyms" as TabType, label: "Gyms", icon: "barbell-outline" },
-              {
-                id: "exercises" as TabType,
-                label: "Exercises",
-                icon: "body-outline",
-              },
-            ].map((tab) => (
-              <TouchableOpacity
-                key={tab.id}
-                className={`flex-1 flex-row items-center justify-center py-2.5 px-3 rounded-lg ${
-                  activeTab === tab.id ? "bg-accent" : "bg-transparent"
-                }`}
-                onPress={() => setActiveTab(tab.id)}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={tab.icon as any}
-                  size={16}
-                  color="white"
-                  style={{ marginRight: 6 }}
-                />
-                <Text
-                  className={`text-white text-sm font-medium ${
-                    activeTab === tab.id ? "font-semibold" : ""
-                  }`}
-                >
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Content based on active tab */}
-        {activeTab === "gyms" ? (
-          gyms.length > 0 ? (
-            <FlatList
-              data={gyms}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                // Replaced <Animated.View entering={FadeIn...}> with plain <View>
-                // FadeIn from react-native-reanimated requires custom native build,
-                // which is NOT available in Expo Go.
-                <View>
-                  <GymCard
-                    name={item.name}
-                    images={[item.image.uri]}
-                    distance={item.distance}
-                    rating={item.rating}
-                    tags={item.tags}
-                    isFavorite={true}
-                    onFavoritePress={() => handleUnsaveGym(item.id)}
-                    // onPress={() => router.push(`/gym/${item.id}`)}
-                  />
-                </View>
-              )}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 40, paddingTop: 2 }}
-              scrollEnabled={false} // parent ScrollView handles scrolling
+      {gyms.length > 0 ? (
+        /* No horizontal padding here — GymCard handles its own margins */
+        <FlatList
+          data={gyms}
+          keyExtractor={(item) => item._id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 40, paddingTop: 4 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#EF4444"
             />
-          ) : (
-            <View className="flex-1 items-center justify-center px-6">
-              <Ionicons name="barbell-outline" size={48} color="#555" />
-              <Text className="text-gray-400 text-center text-base mt-4">
-                You haven't saved any gyms yet.
-              </Text>
-              <TouchableOpacity
-                className="mt-5 px-6 py-3 bg-red-600 rounded-xl"
-                onPress={() => router.push("/explore")}
-                activeOpacity={0.8}
-              >
-                <Text className="text-white font-medium">Explore Gyms</Text>
-              </TouchableOpacity>
-            </View>
-          )
-        ) : exercises.length > 0 ? (
-          <FlatList
-            data={exercises}
-            keyExtractor={(item) => item.id}
-            renderItem={renderExerciseItem}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingVertical: 8 }}
-            scrollEnabled={false} // parent ScrollView handles scrolling
-          />
-        ) : (
-          <View className="flex-1 items-center justify-center px-6">
-            <Ionicons name="body-outline" size={48} color="#555" />
-            <Text className="text-gray-400 text-center text-base mt-4">
-              You haven't bookmarked any exercises yet.
-            </Text>
-            <TouchableOpacity
-              className="mt-5 px-6 py-3 bg-red-600 rounded-xl"
-              onPress={() => router.push("/(tabs)/(exercise)/explore")}
-              activeOpacity={0.8}
-            >
-              <Text className="text-white font-medium">Browse Exercises</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </ScrollView>
+          }
+          renderItem={({ item }) => (
+            <GymCard
+              name={item.name}
+              images={item.imageUrls?.length ? item.imageUrls : ["https://placehold.co/600x400/1C1C1E/ffffff?text=No+Image"]}
+              distance={item.address || item.location || ""}
+              rating={item.rating?.toFixed(1) ?? "N/A"}
+              reviews={item.rating ? Math.floor(item.rating * 20) : 0}
+              isFavorite={true}
+              amenities={item.amenities}
+              onPress={() =>
+                router.push({
+                  pathname: "/(tabs)/(home)/gym-profile",
+                  params: { gymId: item._id },
+                })
+              }
+              onFavoritePress={() => handleUnsave(item._id)}
+            />
+          )}
+        />
+      ) : (
+        <View className="flex-1 items-center justify-center px-6">
+          <Ionicons name="heart-outline" size={56} color="#555" />
+          <Text className="text-gray-400 text-center text-base mt-4">
+            No gyms in your OG Collection yet.
+          </Text>
+          <Text className="text-gray-500 text-center text-sm mt-1">
+            Tap the heart on any gym to save it here.
+          </Text>
+          <TouchableOpacity
+            className="mt-6 px-6 py-3 bg-accent rounded-xl"
+            onPress={() => router.push("/(tabs)/(home)/HomeScreen")}
+            activeOpacity={0.8}
+          >
+            <Text className="text-white font-medium">Explore Gyms</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 };

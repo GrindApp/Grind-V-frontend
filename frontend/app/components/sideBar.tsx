@@ -256,6 +256,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   menuItemText: {
+    flex: 1,
     marginLeft: 20,
     fontSize: 16,
     color: "#E0E0E0",

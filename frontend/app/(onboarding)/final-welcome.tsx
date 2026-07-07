@@ -89,16 +89,15 @@ const FinalWelcomeScreen = () => {
         body: formData,
       });
 
-      // ✅ Read raw response for debugging
       const rawText = await res1.text();
-      console.log("🧾 Profile API Response Text:", rawText);
+      console.log("Profile API raw response:", rawText);
 
       let profileRes;
       try {
         profileRes = JSON.parse(rawText);
       } catch (e) {
         throw new Error(
-          "Invalid JSON response from server while creating profile."
+          `Server returned non-JSON (status ${res1.status}): ${rawText.slice(0, 300)}`
         );
       }
 

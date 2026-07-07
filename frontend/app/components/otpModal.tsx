@@ -57,17 +57,26 @@ const OtpModal: React.FC<OtpModalProps> = ({ visible, onClose, phoneNumber = '+9
   };
 
   const handleOtpChange = (text: string, index: number) => {
-    if (text.length > 1) {
-      const otpArray = text.slice(0, 6).split('');
-      const filledOtp = [...otpArray, ...Array(6 - otpArray.length).fill('')];
-      setOtp(filledOtp.slice(0, 6));
-      const lastIndex = Math.min(otpArray.length - 1, 5);
-      inputRefs.current[lastIndex]?.focus();
+    const cleaned = text.replace(/[^0-9]/g, '');
+
+    if (cleaned.length > 1) {
+      // Paste or buffered multi-char input — fill forward from current box
+      const digits = cleaned.slice(0, 6 - index).split('');
+      setOtp(prev => {
+        const next = [...prev];
+        digits.forEach((d, i) => { next[index + i] = d; });
+        return next;
+      });
+      const lastFilled = Math.min(index + digits.length - 1, 5);
+      inputRefs.current[lastFilled]?.focus();
     } else {
-      const updatedOtp = [...otp];
-      updatedOtp[index] = text;
-      setOtp(updatedOtp);
-      if (text && index < 5) inputRefs.current[index + 1]?.focus();
+      // Single digit — functional updater avoids stale state on fast taps
+      setOtp(prev => {
+        const next = [...prev];
+        next[index] = cleaned;
+        return next;
+      });
+      if (cleaned && index < 5) inputRefs.current[index + 1]?.focus();
     }
   };
 

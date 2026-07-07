@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { decodeJWT } from '@/utils/jwt';
+import VolumeTracker from '@/app/components/lore/VolumeTracker';
+import StepCounter from '@/app/components/homepage/StepCounter';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -68,8 +70,6 @@ const DURATION_OPTIONS = [30, 45, 60, 90];
 const goalLabel = (g: string) => GOALS.find(x => x.id === g)?.label ?? g;
 const levelLabel = (l: string) => LEVELS.find(x => x.id === l)?.label ?? l;
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const todayName = () => new Date().toLocaleDateString('en-US', { weekday: 'long' });
 
 // ─── Chip ─────────────────────────────────────────────────────────────────────
 const Chip = ({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) => (
@@ -88,6 +88,7 @@ export default function LorePage() {
   const [token, setToken] = useState<string | null>(null);
   const [activePlan, setActivePlan] = useState<any>(null);
   const [showForm, setShowForm] = useState(false);
+  const [activeTab, setActiveTab] = useState<'plan' | 'volume'>('plan');
   const [loading, setLoading] = useState(true);
 
   // Form state
@@ -181,22 +182,48 @@ export default function LorePage() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.centered}><ActivityIndicator color="#A78BFA" size="large" /></View>
+        <View style={styles.centered}><ActivityIndicator color="#EF4444" size="large" /></View>
       </SafeAreaView>
     );
   }
 
-  // ── Active plan view ──────────────────────────────────────────────────────
+  // ── Active plan view with Volume tab ─────────────────────────────────────
   if (activePlan && !showForm) return (
-    <ActivePlanView
-      plan={activePlan}
-      onReset={() => {
-        setStep(0);
-        setForm(INITIAL_FORM);
-        setTemplates([]);
-        setShowForm(true);
-      }}
-    />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Tab bar */}
+      <View style={tabStyles.bar}>
+        <TouchableOpacity
+          style={[tabStyles.tab, activeTab === 'plan' && tabStyles.tabActive]}
+          onPress={() => setActiveTab('plan')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="calendar-outline" size={14} color={activeTab === 'plan' ? '#fff' : '#555'} />
+          <Text style={[tabStyles.tabText, activeTab === 'plan' && tabStyles.tabTextActive]}>My Plan</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[tabStyles.tab, activeTab === 'volume' && tabStyles.tabActive]}
+          onPress={() => setActiveTab('volume')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="bar-chart-outline" size={14} color={activeTab === 'volume' ? '#fff' : '#555'} />
+          <Text style={[tabStyles.tabText, activeTab === 'volume' && tabStyles.tabTextActive]}>Volume</Text>
+        </TouchableOpacity>
+      </View>
+
+      {activeTab === 'plan' ? (
+        <ActivePlanView
+          plan={activePlan}
+          onReset={() => {
+            setStep(0);
+            setForm(INITIAL_FORM);
+            setTemplates([]);
+            setShowForm(true);
+          }}
+        />
+      ) : (
+        <VolumeTracker userId={userId!} token={token!} />
+      )}
+    </SafeAreaView>
   );
 
   // ── Form wizard ───────────────────────────────────────────────────────────
@@ -242,13 +269,13 @@ export default function LorePage() {
                 activeOpacity={0.8}
               >
                 <View style={[styles.optionIcon, form.fitnessLevel === l.id && styles.optionIconSelected]}>
-                  <Ionicons name={l.icon as any} size={22} color={form.fitnessLevel === l.id ? '#fff' : '#A78BFA'} />
+                  <Ionicons name={l.icon as any} size={22} color={form.fitnessLevel === l.id ? '#fff' : '#EF4444'} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.optionLabel}>{l.label}</Text>
                   <Text style={styles.optionDesc}>{l.desc}</Text>
                 </View>
-                {form.fitnessLevel === l.id && <Ionicons name="checkmark-circle" size={22} color="#A78BFA" />}
+                {form.fitnessLevel === l.id && <Ionicons name="checkmark-circle" size={22} color="#EF4444" />}
               </TouchableOpacity>
             ))}
           </View>
@@ -267,8 +294,8 @@ export default function LorePage() {
                   onPress={() => setForm(f => ({ ...f, goal: g.id }))}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name={g.icon as any} size={26} color={form.goal === g.id ? '#A78BFA' : '#555'} />
-                  <Text style={[styles.goalLabel, form.goal === g.id && { color: '#A78BFA' }]}>{g.label}</Text>
+                  <Ionicons name={g.icon as any} size={26} color={form.goal === g.id ? '#EF4444' : '#555'} />
+                  <Text style={[styles.goalLabel, form.goal === g.id && { color: '#EF4444' }]}>{g.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -323,8 +350,8 @@ export default function LorePage() {
                   onPress={() => setForm(f => ({ ...f, workoutLocation: l.id }))}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name={l.icon as any} size={28} color={form.workoutLocation === l.id ? '#A78BFA' : '#555'} />
-                  <Text style={[styles.locLabel, form.workoutLocation === l.id && { color: '#A78BFA' }]}>{l.label}</Text>
+                  <Ionicons name={l.icon as any} size={28} color={form.workoutLocation === l.id ? '#EF4444' : '#555'} />
+                  <Text style={[styles.locLabel, form.workoutLocation === l.id && { color: '#EF4444' }]}>{l.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -406,7 +433,7 @@ export default function LorePage() {
             </Text>
 
             {fetchingPlans ? (
-              <View style={styles.centered}><ActivityIndicator color="#A78BFA" /></View>
+              <View style={styles.centered}><ActivityIndicator color="#EF4444" /></View>
             ) : templates.length === 0 ? (
               <View style={[styles.centered, { marginTop: 40 }]}>
                 <Ionicons name="search-outline" size={48} color="#333" />
@@ -489,20 +516,39 @@ export default function LorePage() {
 function ActivePlanView({ plan: userPlan, onReset }: { plan: any; onReset: () => void }) {
   const catalog = userPlan.plan ?? {};
   const currentWeek = userPlan.currentWeek ?? 1;
-  const currentDay = userPlan.currentDay ?? 1;
+
+  // Map today's weekday → day number (Mon=1 … Sun=7), clamped to plan's days/week
+  const todayDayNum = (() => {
+    const d = new Date().getDay(); // 0=Sun,1=Mon…6=Sat
+    const monBased = d === 0 ? 7 : d; // Mon=1…Sun=7
+    return Math.min(monBased, catalog.workoutDaysPerWeek ?? monBased);
+  })();
+  const currentDay = userPlan.currentDay && userPlan.currentDay > 1
+    ? userPlan.currentDay
+    : todayDayNum;
+
+  const [openWeeks, setOpenWeeks] = useState<Set<number>>(new Set([currentWeek]));
+
+  const toggleWeek = (n: number) => {
+    setOpenWeeks(prev => {
+      const next = new Set(prev);
+      next.has(n) ? next.delete(n) : next.add(n);
+      return next;
+    });
+  };
 
   // Current day's workout from the catalog weeks array
   const weekData = catalog.weeks?.find((w: any) => w.weekNumber === currentWeek)
     ?? catalog.weeks?.[0];
   const todayData = weekData?.days?.find((d: any) => d.dayNumber === currentDay)
+    ?? weekData?.days?.find((d: any) => d.dayNumber === todayDayNum)
     ?? weekData?.days?.[0];
 
   // All days in the current week for the weekly row
   const currentWeekDays: any[] = weekData?.days ?? [];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         {/* Header */}
         <View style={[styles.header, { paddingBottom: 20 }]}>
           <View style={{ flex: 1 }}>
@@ -528,10 +574,13 @@ function ActivePlanView({ plan: userPlan, onReset }: { plan: any; onReset: () =>
           ))}
         </View>
 
+        {/* Step counter */}
+        <StepCounter />
+
         {/* Progress badge */}
         <View style={{ paddingHorizontal: 20, marginTop: 8 }}>
           <View style={styles.progressBadge}>
-            <Ionicons name="calendar-outline" size={14} color="#A78BFA" />
+            <Ionicons name="calendar-outline" size={14} color="#EF4444" />
             <Text style={styles.progressBadgeText}>
               Week {currentWeek} of {catalog.durationWeeks ?? '?'} · Day {currentDay}
             </Text>
@@ -546,7 +595,7 @@ function ActivePlanView({ plan: userPlan, onReset }: { plan: any; onReset: () =>
           {todayData && !todayData.isRestDay ? (
             <>
               <View style={styles.focusBadge}>
-                <Ionicons name="flame-outline" size={14} color="#A78BFA" />
+                <Ionicons name="flame-outline" size={14} color="#EF4444" />
                 <Text style={styles.focusBadgeText}>{todayData.focus}</Text>
               </View>
               {(todayData.exercises ?? []).map((ex: any, i: number) => (
@@ -582,7 +631,7 @@ function ActivePlanView({ plan: userPlan, onReset }: { plan: any; onReset: () =>
               const isActive = day.dayNumber === currentDay;
               return (
                 <View key={day.dayNumber} style={[styles.weekDayCard, isActive && styles.weekDayCardActive]}>
-                  <Text style={[styles.weekDayCardNum, isActive && { color: '#A78BFA' }]}>Day {day.dayNumber}</Text>
+                  <Text style={[styles.weekDayCardNum, isActive && { color: '#EF4444' }]}>Day {day.dayNumber}</Text>
                   <Text style={[styles.weekDayCardFocus, isActive && { color: '#fff' }]} numberOfLines={1}>
                     {day.isRestDay ? 'Rest' : day.focus}
                   </Text>
@@ -593,36 +642,67 @@ function ActivePlanView({ plan: userPlan, onReset }: { plan: any; onReset: () =>
           </View>
         </View>
 
-        {/* Full plan — all weeks */}
+        {/* Full plan — collapsible week accordions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Full program</Text>
-          {(catalog.weeks ?? []).map((week: any) => (
-            <View key={week.weekNumber} style={{ marginBottom: 16 }}>
-              <Text style={styles.weekLabel}>Week {week.weekNumber}</Text>
-              {(week.days ?? []).map((day: any) => (
-                <View key={day.dayNumber} style={styles.fullDayCard}>
-                  <View style={styles.fullDayHeader}>
-                    <Text style={styles.fullDayName}>Day {day.dayNumber}</Text>
-                    <Text style={styles.fullDayFocus}>{day.isRestDay ? 'Rest' : day.focus}</Text>
+          {(catalog.weeks ?? []).map((week: any) => {
+            const isOpen = openWeeks.has(week.weekNumber);
+            const dayCount = (week.days ?? []).length;
+            const isCurrent = week.weekNumber === currentWeek;
+            return (
+              <View key={week.weekNumber} style={styles.weekAccordion}>
+                <TouchableOpacity
+                  onPress={() => toggleWeek(week.weekNumber)}
+                  activeOpacity={0.75}
+                  style={styles.weekAccordionHeader}
+                >
+                  <View style={styles.weekAccordionLeft}>
+                    <View style={[styles.weekNumBadge, isCurrent && { backgroundColor: '#EF4444' }]}>
+                      <Text style={styles.weekNumText}>{week.weekNumber}</Text>
+                    </View>
+                    <View>
+                      <Text style={styles.weekAccordionTitle}>
+                        Week {week.weekNumber}
+                        {isCurrent ? '  ·  Current' : ''}
+                      </Text>
+                      <Text style={styles.weekAccordionSub}>{dayCount} days</Text>
+                    </View>
                   </View>
-                  {!day.isRestDay && (day.exercises ?? []).map((ex: any, j: number) => (
-                    <Text key={j} style={styles.fullDayExercise}>
-                      • {ex.name}{ex.sets ? `  ${ex.sets}×${ex.reps}` : ''}{ex.duration ? `  ${ex.duration}` : ''}
-                    </Text>
-                  ))}
-                </View>
-              ))}
-            </View>
-          ))}
+                  <Ionicons
+                    name={isOpen ? 'chevron-up' : 'chevron-down'}
+                    size={18}
+                    color={isOpen ? '#EF4444' : '#444'}
+                  />
+                </TouchableOpacity>
+
+                {isOpen && (
+                  <View style={styles.weekAccordionBody}>
+                    {(week.days ?? []).map((day: any) => (
+                      <View key={day.dayNumber} style={styles.fullDayCard}>
+                        <View style={styles.fullDayHeader}>
+                          <Text style={styles.fullDayName}>Day {day.dayNumber}</Text>
+                          <Text style={styles.fullDayFocus}>{day.isRestDay ? 'Rest' : day.focus}</Text>
+                        </View>
+                        {!day.isRestDay && (day.exercises ?? []).map((ex: any, j: number) => (
+                          <Text key={j} style={styles.fullDayExercise}>
+                            • {ex.name}{ex.sets ? `  ${ex.sets}×${ex.reps}` : ''}{ex.duration ? `  ${ex.duration}` : ''}
+                          </Text>
+                        ))}
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            );
+          })}
         </View>
-      </ScrollView>
-    </SafeAreaView>
+    </ScrollView>
   );
 }
 
 // ─── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  container: { flex: 1, backgroundColor: '#1C1E20' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12 },
@@ -632,7 +712,7 @@ const styles = StyleSheet.create({
   stepIndicator: { color: '#555', fontSize: 13 },
 
   progressTrack: { height: 3, backgroundColor: '#1A1A1A', marginHorizontal: 20, borderRadius: 2 },
-  progressFill: { height: '100%', backgroundColor: '#A78BFA', borderRadius: 2 },
+  progressFill: { height: '100%', backgroundColor: '#EF4444', borderRadius: 2 },
 
   scrollContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 120 },
 
@@ -643,37 +723,37 @@ const styles = StyleSheet.create({
 
   // Option card (level)
   optionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#222' },
-  optionCardSelected: { borderColor: '#A78BFA' },
+  optionCardSelected: { borderColor: '#EF4444' },
   optionIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1A1A1A', justifyContent: 'center', alignItems: 'center', marginRight: 14 },
-  optionIconSelected: { backgroundColor: '#A78BFA' },
+  optionIconSelected: { backgroundColor: '#EF4444' },
   optionLabel: { color: '#fff', fontSize: 16, fontWeight: '700' },
   optionDesc: { color: '#666', fontSize: 13, marginTop: 2 },
 
   // Goal grid
   goalGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   goalCard: { width: '47%', backgroundColor: '#111', borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#222', gap: 10 },
-  goalCardSelected: { borderColor: '#A78BFA', backgroundColor: '#1A1218' },
+  goalCardSelected: { borderColor: '#EF4444', backgroundColor: '#1A0A0A' },
   goalLabel: { color: '#888', fontSize: 13, fontWeight: '600', textAlign: 'center' },
 
   // Pills
   pillRow: { flexDirection: 'row', gap: 10 },
   pill: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 30, backgroundColor: '#111', borderWidth: 1, borderColor: '#222' },
-  pillSelected: { backgroundColor: '#A78BFA', borderColor: '#A78BFA' },
+  pillSelected: { backgroundColor: '#EF4444', borderColor: '#EF4444' },
   pillText: { color: '#666', fontWeight: '600' },
   pillTextSelected: { color: '#fff' },
 
   // Location
   locRow: { flexDirection: 'row', gap: 10 },
   locCard: { flex: 1, backgroundColor: '#111', borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, borderColor: '#222', gap: 8 },
-  locCardSelected: { borderColor: '#A78BFA', backgroundColor: '#1A1218' },
+  locCardSelected: { borderColor: '#EF4444', backgroundColor: '#1A0A0A' },
   locLabel: { color: '#888', fontSize: 13, fontWeight: '600' },
 
   // Chips
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: '#111', borderWidth: 1, borderColor: '#222' },
-  chipSelected: { backgroundColor: '#A78BFA22', borderColor: '#A78BFA' },
+  chipSelected: { backgroundColor: '#EF444422', borderColor: '#EF4444' },
   chipText: { color: '#888', fontSize: 13 },
-  chipTextSelected: { color: '#A78BFA' },
+  chipTextSelected: { color: '#EF4444' },
 
   // Inputs
   inputRow: { flexDirection: 'row', gap: 12 },
@@ -687,23 +767,23 @@ const styles = StyleSheet.create({
   planCardTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
   planCardMeta: { color: '#666', fontSize: 13, marginTop: 4 },
   planBadge: { backgroundColor: '#1A1A1A', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  planBadgeText: { color: '#A78BFA', fontSize: 12, fontWeight: '600', textTransform: 'capitalize' },
+  planBadgeText: { color: '#EF4444', fontSize: 12, fontWeight: '600', textTransform: 'capitalize' },
   planDay: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#1A1A1A' },
   planDayName: { color: '#aaa', fontSize: 13, fontWeight: '600' },
   planDayFocus: { color: '#555', fontSize: 13 },
   planMore: { color: '#555', fontSize: 12, marginTop: 8, textAlign: 'center' },
-  subscribeBtn: { backgroundColor: '#A78BFA', borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 16 },
+  subscribeBtn: { backgroundColor: '#EF4444', borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 16 },
   subscribeBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 
   // Footer
-  footer: { padding: 20, paddingBottom: 32, backgroundColor: '#0A0A0A', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#1A1A1A' },
-  nextBtn: { backgroundColor: '#A78BFA', borderRadius: 16, paddingVertical: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+  footer: { padding: 20, paddingBottom: 32, backgroundColor: '#1C1E20', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#2A2A2A' },
+  nextBtn: { backgroundColor: '#EF4444', borderRadius: 16, paddingVertical: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   nextBtnDisabled: { backgroundColor: '#2A2A2A' },
   nextBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 
   // Active plan view
   changeBtn: { backgroundColor: '#1A1A1A', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  changeBtnText: { color: '#A78BFA', fontSize: 13, fontWeight: '600' },
+  changeBtnText: { color: '#EF4444', fontSize: 13, fontWeight: '600' },
   statsRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 10, marginBottom: 8 },
   statCard: { flex: 1, backgroundColor: '#111', borderRadius: 14, padding: 14, alignItems: 'center' },
   statValue: { color: '#fff', fontSize: 16, fontWeight: '800' },
@@ -712,11 +792,11 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: 20, marginTop: 24 },
   sectionTitle: { color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 16 },
   focusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 14 },
-  focusBadgeText: { color: '#A78BFA', fontSize: 14, fontWeight: '600' },
+  focusBadgeText: { color: '#EF4444', fontSize: 14, fontWeight: '600' },
 
   exerciseRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#111', borderRadius: 14, padding: 14, marginBottom: 8 },
-  exerciseNum: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#A78BFA22', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  exerciseNumText: { color: '#A78BFA', fontSize: 13, fontWeight: '800' },
+  exerciseNum: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#EF444422', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  exerciseNumText: { color: '#EF4444', fontSize: 13, fontWeight: '800' },
   exerciseName: { color: '#fff', fontSize: 14, fontWeight: '600' },
   exerciseMeta: { color: '#555', fontSize: 12, marginTop: 3 },
 
@@ -728,34 +808,63 @@ const styles = StyleSheet.create({
   weekDayToday: {},
   weekDayName: { color: '#555', fontSize: 11, fontWeight: '600' },
   weekDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#333' },
-  weekDotActive: { backgroundColor: '#A78BFA' },
+  weekDotActive: { backgroundColor: '#EF4444' },
   weekDotRest: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#1A1A1A' },
-  weekTodayLine: { position: 'absolute', bottom: -14, width: 4, height: 4, borderRadius: 2, backgroundColor: '#A78BFA' },
+  weekTodayLine: { position: 'absolute', bottom: -14, width: 4, height: 4, borderRadius: 2, backgroundColor: '#EF4444' },
 
   fullDayCard: { backgroundColor: '#111', borderRadius: 14, padding: 14, marginBottom: 10 },
   fullDayHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   fullDayName: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  fullDayFocus: { color: '#A78BFA', fontSize: 13 },
+  fullDayFocus: { color: '#EF4444', fontSize: 13 },
   fullDayExercise: { color: '#666', fontSize: 13, marginTop: 3 },
 
   // Goal tags on plan cards
-  goalTag: { backgroundColor: '#A78BFA22', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: '#A78BFA44' },
-  goalTagText: { color: '#A78BFA', fontSize: 12, fontWeight: '600' },
+  goalTag: { backgroundColor: '#EF444422', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: '#EF444444' },
+  goalTagText: { color: '#EF4444', fontSize: 12, fontWeight: '600' },
   planDescription: { color: '#666', fontSize: 13, marginTop: 8, lineHeight: 18 },
 
   // Active plan progress badge
-  progressBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#A78BFA22', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#A78BFA44' },
-  progressBadgeText: { color: '#A78BFA', fontSize: 13, fontWeight: '600' },
+  progressBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#EF444422', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: '#EF444444' },
+  progressBadgeText: { color: '#EF4444', fontSize: 13, fontWeight: '600' },
 
   exerciseDesc: { color: '#444', fontSize: 12, marginTop: 2 },
 
   // Week grid in active plan view
   weekGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   weekDayCard: { width: '30%', backgroundColor: '#111', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: '#222', alignItems: 'center' },
-  weekDayCardActive: { borderColor: '#A78BFA', backgroundColor: '#1A1218' },
+  weekDayCardActive: { borderColor: '#EF4444', backgroundColor: '#1A0A0A' },
   weekDayCardNum: { color: '#555', fontSize: 11, fontWeight: '700', marginBottom: 4 },
   weekDayCardFocus: { color: '#666', fontSize: 12, textAlign: 'center' },
-  weekDayActiveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#A78BFA', marginTop: 6 },
+  weekDayActiveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444', marginTop: 6 },
 
-  weekLabel: { color: '#A78BFA', fontSize: 13, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.8 },
+  weekLabel: { color: '#EF4444', fontSize: 13, fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.8 },
+
+  // Week accordion
+  weekAccordion: { backgroundColor: '#111', borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: '#222', overflow: 'hidden' },
+  weekAccordionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14 },
+  weekAccordionLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  weekNumBadge: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#1A1A1A', alignItems: 'center', justifyContent: 'center' },
+  weekNumText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  weekAccordionTitle: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  weekAccordionSub: { color: '#555', fontSize: 11, marginTop: 2 },
+  weekAccordionBody: { borderTopWidth: 1, borderTopColor: '#1A1A1A', padding: 10 },
+});
+
+const tabStyles = StyleSheet.create({
+  bar: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 4,
+    backgroundColor: '#111',
+    borderRadius: 12,
+    padding: 4,
+  },
+  tab: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 9, borderRadius: 9,
+  },
+  tabActive: { backgroundColor: '#EF444415', borderWidth: 1, borderColor: '#EF444430' },
+  tabText: { color: '#555', fontSize: 13, fontWeight: '600' },
+  tabTextActive: { color: '#EF4444' },
 });

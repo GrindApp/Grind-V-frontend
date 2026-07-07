@@ -1,15 +1,20 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
+  Animated,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { decodeJWT } from "@/utils/jwt";
 import GymCard from "../GymCard";
 import { fetchGyms } from "@/apis/gyms";
-import GymProfileScreen from "@/app/(tabs)/(home)/gym-profile";
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 type GymItemType = {
   _id: string;
@@ -24,36 +29,114 @@ type GymItemType = {
   imageUrls: string[];
 };
 
+type GymListProps = {
+  searchQuery?: string;
+  categoryFilter?: string | null;
+};
+
 const PAGE_SIZE = 10;
 
-const GymList = () => {
+const GymList = ({ searchQuery = "", categoryFilter = null }: GymListProps) => {
   const [gyms, setGyms] = useState<GymItemType[]>([]);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [userId, setUserId] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState("");
+  const toastOpacity = useRef(new Animated.Value(0)).current;
 
   const router = useRouter();
 
-  const loadGyms = async (pageToLoad: number, reset = false) => {
-    if (loading || (!hasMore && !reset)) return;
+  // Load auth + favorite IDs on mount
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const tok = await AsyncStorage.getItem("authToken");
+        if (!tok) return;
+        setToken(tok);
+        const decoded = decodeJWT(tok) as any;
+        const uid = decoded?.id || decoded?._id;
+        if (!uid) return;
+        setUserId(uid);
 
-    setLoading(true);
-    console.log(`Loading gyms - Page: ${pageToLoad}, Reset: ${reset}`);
+        const res = await fetch(
+          `${API_URL}/api/v1/userProfile/user/${uid}/favorite-gym-ids`,
+          { headers: { Authorization: `Bearer ${tok}` } }
+        );
+        const json = await res.json();
+        if (json.success) {
+          setFavoriteIds(new Set(json.data));
+        }
+      } catch (err) {
+        console.error("GymList init error:", err);
+      }
+    };
+    init();
+  }, []);
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    toastOpacity.setValue(1);
+    Animated.sequence([
+      Animated.delay(1800),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const toggleFavorite = async (gymId: string) => {
+    if (!userId || !token) return;
+    const wasSaved = favoriteIds.has(gymId);
+
+    // Optimistic update
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      wasSaved ? next.delete(gymId) : next.add(gymId);
+      return next;
+    });
+
+    showToast(wasSaved ? "Removed from OG Collection" : "Saved to your OG Collection ❤️");
 
     try {
-      const data = await fetchGyms({ page: pageToLoad, pageSize: PAGE_SIZE });
-      console.log(
-        `Received ${data.results.length} gyms, Total count: ${data.count}`
+      const res = await fetch(
+        `${API_URL}/api/v1/userProfile/user/${userId}/favorite-gym/${gymId}`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
+      const json = await res.json();
+      if (!json.success) {
+        // Revert on failure
+        setFavoriteIds((prev) => {
+          const next = new Set(prev);
+          wasSaved ? next.add(gymId) : next.delete(gymId);
+          return next;
+        });
+      }
+    } catch {
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        wasSaved ? next.add(gymId) : next.delete(gymId);
+        return next;
+      });
+    }
+  };
 
+  const loadGyms = async (pageToLoad: number, reset = false) => {
+    if (loading || (!hasMore && !reset)) return;
+    setLoading(true);
+    try {
+      const data = await fetchGyms({ page: pageToLoad, pageSize: PAGE_SIZE });
       if (reset) {
         setGyms(data.results);
-        setPage(2); // Next page to load
-        setHasMore(data.results.length === PAGE_SIZE); // Has more if we got full page
+        setPage(2);
+        setHasMore(data.results.length === PAGE_SIZE);
       } else {
         setGyms((prev) => [...prev, ...data.results]);
-        setPage(pageToLoad + 1); // Next page to load
-        setHasMore(data.results.length === PAGE_SIZE); // Has more if we got full page
+        setPage(pageToLoad + 1);
+        setHasMore(data.results.length === PAGE_SIZE);
       }
     } catch (error) {
       console.error("Error fetching gyms:", error);
@@ -62,32 +145,39 @@ const GymList = () => {
     }
   };
 
-  // Load first page on mount
   useEffect(() => {
     loadGyms(1, true);
   }, []);
 
   const handleLoadMore = () => {
-    if (!loading && hasMore) {
-      console.log(`Loading more gyms - Page: ${page}`);
-      loadGyms(page);
-    }
-  };
-
-  const handleSeeAllPress = () => {
-    console.log("Navigating to gym list screen");
-    router.push("/(tabs)/(home)/all-gyms");
+    if (!loading && hasMore) loadGyms(page);
   };
 
   const handleGymPress = (gym: GymItemType) => {
-    const gymId = gym._id || gym.id;
-    console.log("Navigating to gym profile with ID:", gymId);
-
     router.push({
       pathname: "/(tabs)/(home)/gym-profile",
-      params: { gymId },
+      params: { gymId: gym._id || gym.id },
     });
   };
+
+  const displayedGyms = useMemo(() => {
+    let result = gyms;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (g) =>
+          g.name?.toLowerCase().includes(q) ||
+          g.location?.toLowerCase().includes(q)
+      );
+    }
+    if (categoryFilter) {
+      const cat = categoryFilter.toLowerCase();
+      result = result.filter((g) =>
+        g.categories?.some((c) => c.toLowerCase().includes(cat))
+      );
+    }
+    return result;
+  }, [gyms, searchQuery, categoryFilter]);
 
   const renderGymItem = ({ item }: { item: GymItemType }) => (
     <GymCard
@@ -98,9 +188,10 @@ const GymList = () => {
       reviews={Math.floor(item.rating * 20)}
       price="₹999/mo"
       priceCategory="₹₹"
-      isFavorite={false}
+      isFavorite={favoriteIds.has(item._id || item.id)}
       amenities={item.amenities}
       onPress={() => handleGymPress(item)}
+      onFavoritePress={() => toggleFavorite(item._id || item.id)}
     />
   );
 
@@ -108,32 +199,26 @@ const GymList = () => {
     <View>
       <View className="flex-row justify-between items-center px-4 mb-3">
         <Text className="text-white text-lg font-medium">Nearby Gyms</Text>
-        <TouchableOpacity onPress={() => handleSeeAllPress()}>
+        <TouchableOpacity onPress={() => router.push("/(tabs)/(home)/all-gyms")}>
           <Text className="text-sm text-gray-400 font-medium">See all</Text>
         </TouchableOpacity>
       </View>
 
-      {gyms.length > 0 ? (
+      {displayedGyms.length > 0 ? (
         <FlatList
-          data={gyms}
+          data={displayedGyms}
           renderItem={renderGymItem}
           keyExtractor={(item, index) =>
             item._id?.toString() || item.id?.toString() || index.toString()
           }
           showsVerticalScrollIndicator={false}
           onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.5} // trigger when close to bottom
+          onEndReachedThreshold={0.5}
           ListFooterComponent={
             loading ? (
-              <ActivityIndicator
-                size="small"
-                color="#fff"
-                style={{ marginVertical: 16 }}
-              />
-            ) : !hasMore && gyms.length > 0 ? (
-              <Text className="text-gray-400 text-center py-4">
-                No more gyms to load
-              </Text>
+              <ActivityIndicator size="small" color="#fff" style={{ marginVertical: 16 }} />
+            ) : !hasMore && displayedGyms.length > 0 ? (
+              <Text className="text-gray-400 text-center py-4">No more gyms to load</Text>
             ) : null
           }
           contentContainerStyle={{ paddingBottom: 20 }}
@@ -145,9 +230,37 @@ const GymList = () => {
         </View>
       ) : (
         <View className="bg-[#262629] rounded-lg mx-4 p-4 items-center">
-          <Text className="text-white text-center">No gyms available</Text>
+          <Text className="text-white text-center">
+            {categoryFilter || searchQuery ? "No gyms match your filter" : "No gyms available"}
+          </Text>
         </View>
       )}
+
+      {/* Toast */}
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          bottom: 24,
+          alignSelf: "center",
+          backgroundColor: "#1C1C1E",
+          borderRadius: 24,
+          paddingHorizontal: 18,
+          paddingVertical: 10,
+          flexDirection: "row",
+          alignItems: "center",
+          opacity: toastOpacity,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 8,
+          zIndex: 999,
+        }}
+      >
+        <Ionicons name="heart" size={16} color="#EF4444" style={{ marginRight: 8 }} />
+        <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>{toastMsg}</Text>
+      </Animated.View>
     </View>
   );
 };

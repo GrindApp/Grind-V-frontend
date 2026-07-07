@@ -164,6 +164,19 @@ const SwipeCard = React.forwardRef<
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 const SWIPED_IDS_KEY = "gymbuddy_swiped_ids";
 
+const toGymBuddy = (p: any): GymBuddy => ({
+  id: p._id,
+  user: p.user?._id ?? p.user,
+  name: p.firstName || "Unknown",
+  age: p.dateOfBirth
+    ? new Date().getFullYear() - new Date(p.dateOfBirth).getFullYear()
+    : 0,
+  distance: `${Math.floor(Math.random() * 10) + 1} km`,
+  bio: p.bio || "Let's work out together!",
+  image: p.imageUrl?.[0] || "https://via.placeholder.com/400",
+  tags: p.interests?.slice(0, 3).map((i: any) => i.name) || ["Fitness"],
+});
+
 const GymBuddyScreen = () => {
   const [gymBuddies, setGymBuddies] = useState<GymBuddy[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -173,40 +186,54 @@ const GymBuddyScreen = () => {
   // Ref pointing to the current top card
   const topCardRef = useRef<SwipeCardRef>(null);
 
+  // Fetches profiles filtered by swiped history AND existing friends
+  const loadProfiles = useCallback(async (token: string) => {
+    const decoded = decodeJWT(token);
+    const currentUserId = decoded?.id || decoded?._id;
+
+    const [profilesRes, friendsRes] = await Promise.all([
+      fetch(`${API_URL}/api/v1/userProfile?page=1&limit=50`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      fetch(`${API_URL}/api/v1/friends/list-friends`, {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    ]);
+
+    if (!profilesRes.ok) throw new Error("Failed to fetch profiles.");
+    const profiles: any[] = (await profilesRes.json()).data || [];
+
+    // Build a set of profile IDs that are already friends so we hide them
+    const friendProfileIds = new Set<string>();
+    if (friendsRes.ok) {
+      const friendsData = (await friendsRes.json()).data || [];
+      friendsData.forEach((friendship: any) => {
+        const iAmUser1 = friendship.user1?.user?.toString() === currentUserId;
+        const other = iAmUser1 ? friendship.user2 : friendship.user1;
+        if (other?._id) friendProfileIds.add(other._id);
+      });
+    }
+
+    return profiles
+      .map(toGymBuddy)
+      .filter(
+        (p) =>
+          !swipedIds.current.has(p.user) &&
+          !swipedIds.current.has(p.id) &&
+          !friendProfileIds.has(p.id)
+      );
+  }, []);
+
   useEffect(() => {
     const init = async () => {
       try {
         const stored = await AsyncStorage.getItem(SWIPED_IDS_KEY);
-        if (stored) {
-          swipedIds.current = new Set(JSON.parse(stored));
-        }
+        if (stored) swipedIds.current = new Set(JSON.parse(stored));
 
         const token = await AsyncStorage.getItem("authToken");
         if (!token) throw new Error("Token not found");
 
-        const response = await fetch(
-          `${API_URL}/api/v1/user-profile?page=1&limit=10`,
-          { method: "GET", headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        if (!response.ok) throw new Error("Failed to fetch profiles.");
-        const result = await response.json();
-        const profiles = result.data || [];
-
-        const transformed: GymBuddy[] = profiles
-          .map((p: any) => ({
-            id: p._id,
-            user: p.user?._id ?? p.user,
-            name: p.firstName || "Unknown",
-            age: new Date().getFullYear() - new Date(p.dateOfBirth).getFullYear(),
-            distance: `${Math.floor(Math.random() * 10) + 1} km`,
-            bio: p.bio || "Let's work out together!",
-            image: p.imageUrl?.[0] || "https://via.placeholder.com/400",
-            tags: p.interests?.slice(0, 3).map((i: any) => i.name) || ["Fitness"],
-          }))
-          .filter((p: GymBuddy) => !swipedIds.current.has(p.user) && !swipedIds.current.has(p.id));
-
-        setGymBuddies(transformed);
+        setGymBuddies(await loadProfiles(token));
       } catch (error) {
         console.error("Error fetching gym buddies:", error);
         Alert.alert("Error", "Failed to load gym buddies.");
@@ -216,7 +243,7 @@ const GymBuddyScreen = () => {
     };
 
     init();
-  }, []);
+  }, [loadProfiles]);
 
   const handleSwipe = useCallback(
     async (direction: "left" | "right", cardIndex: number) => {
@@ -292,24 +319,8 @@ const GymBuddyScreen = () => {
               setLoading(true);
               try {
                 const token = await AsyncStorage.getItem("authToken");
-                const response = await fetch(`${API_URL}/api/v1/user-profile?page=1&limit=10`, {
-                  method: "GET",
-                  headers: { Authorization: `Bearer ${token}` },
-                });
-                const result = await response.json();
-                const profiles = result.data || [];
-                setGymBuddies(
-                  profiles.map((p: any) => ({
-                    id: p._id,
-                    user: p.user?._id ?? p.user,
-                    name: p.firstName || "Unknown",
-                    age: new Date().getFullYear() - new Date(p.dateOfBirth).getFullYear(),
-                    distance: `${Math.floor(Math.random() * 10) + 1} km`,
-                    bio: p.bio || "Let's work out together!",
-                    image: p.imageUrl?.[0] || "https://via.placeholder.com/400",
-                    tags: p.interests?.slice(0, 3).map((i: any) => i.name) || ["Fitness"],
-                  }))
-                );
+                if (!token) throw new Error("Token not found");
+                setGymBuddies(await loadProfiles(token));
               } catch (e) {
                 Alert.alert("Error", "Failed to reload profiles.");
               } finally {

@@ -11,7 +11,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useUnreadMessages } from '@/context/UnreadMessagesContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { decodeJWT } from '@/utils/jwt';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 import RatingArenas from '../../components/homepage/RatingArenas';
 import CategoryGrid from '../../components/homepage/CategoryGrid';
@@ -26,16 +31,37 @@ const SIDEBAR_WIDTH = screenWidth * 0.75;
 const HomeScreen = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [streak, setStreak] = useState(0);
   const slideAnim = useRef(new Animated.Value(-SIDEBAR_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const router = useRouter();
+  const { hasUnread, recheck } = useUnreadMessages();
+
+  useFocusEffect(useCallback(() => { recheck(); }, [recheck]));
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const t = await AsyncStorage.getItem('authToken');
+        if (!t) return;
+        const uid = (decodeJWT(t) as any)?.id;
+        if (!uid) return;
+        const res = await fetch(`${API_URL}/api/v1/user-tasks/streak/${uid}`, {
+          headers: { Authorization: `Bearer ${t}` },
+        });
+        const data = await res.json();
+        if (data.success) setStreak(data.data.streak);
+      } catch {}
+    })();
+  }, []);
 
   const sections = useMemo(() => [
     { key: 'activity', render: () => <DailyTasks /> },
     { key: 'rating', render: () => <RatingArenas /> },
-    { key: 'category', render: () => <CategoryGrid /> },
-    { key: 'gyms', render: () => <GymList searchQuery={searchQuery} /> },
-  ], [searchQuery]);
+    { key: 'category', render: () => <CategoryGrid onSelect={setSelectedCategory} /> },
+    { key: 'gyms', render: () => <GymList searchQuery={searchQuery} categoryFilter={selectedCategory} /> },
+  ], [searchQuery, selectedCategory]);
 
   const animateSidebar = useCallback((open: boolean) => {
     Animated.parallel([
@@ -79,16 +105,14 @@ const HomeScreen = () => {
 
   const renderHeader = useCallback(() => (
     <View className="bg-primary">
-      {/* Compact header with integrated search */}
       <View className="flex-row items-center px-2 py-2.5 bg-[#99999] rounded-b-lg shadow">
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => setIsSidebarOpen(true)}
           className="p-1.5 mr-2"
         >
           <Ionicons name="menu" size={22} color="white" />
         </TouchableOpacity>
-        
-        {/* Integrated search bar */}
+
         <View className="flex-1 mx-1">
           <SearchBar
             value={searchQuery}
@@ -98,17 +122,41 @@ const HomeScreen = () => {
             onSubmit={handleSearch}
           />
         </View>
-        
-        <TouchableOpacity 
+
+        {streak > 0 && (
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', gap: 2,
+            backgroundColor: '#1A1A1A', borderRadius: 20,
+            paddingHorizontal: 8, paddingVertical: 4, marginHorizontal: 4,
+          }}>
+            <Text style={{ fontSize: 13 }}>🔥</Text>
+            <Text style={{ color: '#FACC15', fontSize: 12, fontWeight: '800' }}>{streak}</Text>
+          </View>
+        )}
+
+        <TouchableOpacity
           onPress={() => router.push("/(chat)/friendList")}
-          className="p-1.5 ml-2"
+          className="p-1.5 ml-1"
+          style={{ position: 'relative' }}
         >
           <Ionicons name="chatbubble-outline" size={22} color="white" />
+          {hasUnread && (
+            <View style={{
+              position: 'absolute',
+              top: 2,
+              right: 2,
+              width: 9,
+              height: 9,
+              borderRadius: 5,
+              backgroundColor: '#EF4444',
+              borderWidth: 1.5,
+              borderColor: '#09090B',
+            }} />
+          )}
         </TouchableOpacity>
       </View>
-      
     </View>
-  ), [searchQuery]);
+  ), [searchQuery, streak]);
 
   return (
     <SafeAreaView className="flex-1 bg-primary">

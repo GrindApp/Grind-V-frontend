@@ -11,16 +11,29 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Animated,
+  Dimensions,
 } from "react-native";
+import { SkeletonBox } from "@/app/components/SkeletonBox";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import StarRating from "react-native-star-rating-widget";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { decodeJWT } from "@/utils/jwt";
 import { fetchGymById } from "@/apis/gyms";
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 const GymProfileScreen = () => {
   const { gymId } = useLocalSearchParams<{ gymId: string }>();
+  const router = useRouter();
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState("");
+  const toastOpacity = React.useRef(new Animated.Value(0)).current;
   const [gym, setGym] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState("monday");
@@ -49,7 +62,7 @@ const GymProfileScreen = () => {
     },
   ]);
 
-  // Fetch gym details
+  // Fetch gym details + auth + initial favorite state
   useEffect(() => {
     const loadGym = async () => {
       try {
@@ -61,8 +74,57 @@ const GymProfileScreen = () => {
         setLoading(false);
       }
     };
-    if (gymId) loadGym();
+
+    const initAuth = async () => {
+      try {
+        const tok = await AsyncStorage.getItem("authToken");
+        if (!tok) return;
+        setAuthToken(tok);
+        const decoded = decodeJWT(tok) as any;
+        const uid = decoded?.id || decoded?._id;
+        if (!uid) return;
+        setUserId(uid);
+
+        const res = await fetch(
+          `${API_URL}/api/v1/userProfile/user/${uid}/favorite-gym-ids`,
+          { headers: { Authorization: `Bearer ${tok}` } }
+        );
+        const json = await res.json();
+        if (json.success && gymId) {
+          setIsFavorite(json.data.includes(gymId));
+        }
+      } catch {}
+    };
+
+    if (gymId) {
+      loadGym();
+      initAuth();
+    }
   }, [gymId]);
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    toastOpacity.setValue(1);
+    Animated.sequence([
+      Animated.delay(1800),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const toggleFavorite = async () => {
+    if (!userId || !authToken) return;
+    const wasLiked = isFavorite;
+    setIsFavorite(!wasLiked);
+    showToast(wasLiked ? "Removed from OG Collection" : "Saved to your OG Collection ❤️");
+    try {
+      await fetch(
+        `${API_URL}/api/v1/userProfile/user/${userId}/favorite-gym/${gymId}`,
+        { method: "POST", headers: { Authorization: `Bearer ${authToken}` } }
+      );
+    } catch {
+      setIsFavorite(wasLiked);
+    }
+  };
 
   const handleAddReview = () => {
     if (newReviewText.trim()) {
@@ -80,10 +142,44 @@ const GymProfileScreen = () => {
   };
 
   if (loading) {
+    const screenWidth = Dimensions.get("window").width;
     return (
-      <SafeAreaView className="flex-1 bg-primary items-center justify-center">
-        <ActivityIndicator size="large" color="#fff" />
-        <Text className="text-white mt-2">Loading gym details...</Text>
+      <SafeAreaView className="flex-1 bg-primary">
+        <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+          {/* Cover image */}
+          <SkeletonBox width={screenWidth} height={256} borderRadius={0} />
+
+          <View className="p-5">
+            {/* Rating + address row */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 12 }}>
+              <SkeletonBox width={60} height={18} borderRadius={6} />
+              <SkeletonBox width={130} height={18} borderRadius={6} />
+            </View>
+
+            {/* Gym name */}
+            <SkeletonBox height={28} borderRadius={8} style={{ marginBottom: 8 }} />
+            <SkeletonBox width="70%" height={16} borderRadius={6} style={{ marginBottom: 24 }} />
+
+            {/* Hours section */}
+            <SkeletonBox width={100} height={14} borderRadius={5} style={{ marginBottom: 12 }} />
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 24 }}>
+              {[0, 1, 2, 3, 4].map((i) => (
+                <SkeletonBox key={i} width={44} height={36} borderRadius={8} />
+              ))}
+            </View>
+
+            {/* Amenities */}
+            <SkeletonBox width={100} height={14} borderRadius={5} style={{ marginBottom: 12 }} />
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
+              {[0, 1, 2, 3].map((i) => (
+                <SkeletonBox key={i} width={90} height={32} borderRadius={20} />
+              ))}
+            </View>
+
+            {/* Action button */}
+            <SkeletonBox height={52} borderRadius={12} />
+          </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -99,18 +195,53 @@ const GymProfileScreen = () => {
   return (
     <SafeAreaView className="flex-1 bg-primary">
       <ScrollView className="flex-1">
-        {/* Cover Image */}
-        <Image
-          source={gym.imageUrls?.[0] || "https://via.placeholder.com/400"}
-          style={{
-            width: "100%",
-            height: 256,
-            borderBottomLeftRadius: 16,
-            borderBottomRightRadius: 16,
-          }}
-          contentFit="cover"
-          transition={300}
-        />
+        {/* Cover Image with back button */}
+        <View style={{ position: "relative" }}>
+          <Image
+            source={gym.imageUrls?.[0] || "https://via.placeholder.com/400"}
+            style={{
+              width: "100%",
+              height: 256,
+              borderBottomLeftRadius: 16,
+              borderBottomRightRadius: 16,
+            }}
+            contentFit="cover"
+            transition={300}
+          />
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{
+              position: "absolute",
+              top: 16,
+              left: 16,
+              zIndex: 10,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              borderRadius: 20,
+              padding: 8,
+            }}
+          >
+            <Ionicons name="chevron-back" size={22} color="white" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={toggleFavorite}
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              zIndex: 10,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              borderRadius: 20,
+              padding: 8,
+            }}
+          >
+            <Ionicons
+              name={isFavorite ? "heart" : "heart-outline"}
+              size={22}
+              color={isFavorite ? "#EF4444" : "white"}
+            />
+          </TouchableOpacity>
+        </View>
 
         <View className="p-5 bg-primary">
           {/* Header */}
@@ -289,6 +420,32 @@ const GymProfileScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Toast */}
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          bottom: 100,
+          alignSelf: "center",
+          backgroundColor: "#1C1C1E",
+          borderRadius: 24,
+          paddingHorizontal: 18,
+          paddingVertical: 10,
+          flexDirection: "row",
+          alignItems: "center",
+          opacity: toastOpacity,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 8,
+          elevation: 8,
+          zIndex: 999,
+        }}
+      >
+        <Ionicons name="heart" size={16} color="#EF4444" style={{ marginRight: 8 }} />
+        <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>{toastMsg}</Text>
+      </Animated.View>
 
       {/* Modal: Add Review */}
       <Modal

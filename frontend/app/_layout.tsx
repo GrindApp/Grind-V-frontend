@@ -2,25 +2,22 @@ import { Stack } from "expo-router";
 import "./global.css";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { OnboardingProvider } from "../context/OnboardingContext";
-import {
-  useQuery,
-  useQueryClient,
-  QueryClient,
-  QueryClientProvider,
-} from "@tanstack/react-query";
+import { UnreadMessagesProvider } from "../context/UnreadMessagesContext";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const queryClient = new QueryClient();
 export default function RootLayout() {
   return (
-    
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
         <OnboardingProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-            }}
-          />
+          <UnreadMessagesProvider>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+              }}
+            />
+          </UnreadMessagesProvider>
         </OnboardingProvider>
       </SafeAreaProvider>
     </QueryClientProvider>

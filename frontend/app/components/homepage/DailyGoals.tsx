@@ -6,6 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { decodeJWT } from '@/utils/jwt';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
@@ -164,6 +165,7 @@ const DailyTasks: React.FC = () => {
     if (!userId || !token || completing) return;
     setCompleting(id);
     setTasks(p => p.map(t => t._id === id ? { ...t, completed: true } : t));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
       const res  = await fetch(`${API_URL}/api/v1/user-tasks/complete/${userId}/${id}`, {
         method: 'PATCH', headers: { Authorization: `Bearer ${token}` },
@@ -172,6 +174,9 @@ const DailyTasks: React.FC = () => {
       if (data.data?.tasks) {
         const updated: Task[] = data.data.tasks;
         setTasks(updated);
+        if (updated.every(t => t.completed)) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        }
         const d = now.getDate(), total = updated.length, done = updated.filter(t => t.completed).length;
         setMap(p => ({ ...p, [d]: total > 0 ? Math.round((done / total) * 100) : 0 }));
       }
