@@ -20,6 +20,7 @@ const UnreadMessagesContext = createContext<UnreadContextType>({
 export const UnreadMessagesProvider = ({ children }: { children: ReactNode }) => {
   const [hasUnread, setHasUnread] = useState(false);
 
+  // Uses GET /api/v1/messages/unread-counts — one request instead of 1+N
   const recheck = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("authToken");
@@ -29,32 +30,21 @@ export const UnreadMessagesProvider = ({ children }: { children: ReactNode }) =>
       const myId = (decoded?.id || decoded?._id)?.toString();
       if (!myId) return;
 
-      const friendsRes = await fetch(`${API_URL}/api/v1/friends/list-friends`, {
+      const res = await fetch(`${API_URL}/api/v1/messages/unread-counts`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!friendsRes.ok) return;
-      const { data: friendships = [] } = await friendsRes.json();
+      if (!res.ok) return;
+      const { data: counts = [] } = await res.json();
 
+      // counts: [{ _id: friendshipId, latestAt, latestSender }]
       const results = await Promise.all(
-        friendships.map(async (f: any) => {
-          const storedTs = await AsyncStorage.getItem(`${LAST_SEEN_PREFIX}${f._id}`);
+        counts.map(async (entry: { _id: string; latestAt: string; latestSender: string }) => {
+          const senderId = entry.latestSender?.toString();
+          if (senderId === myId) return false; // own message, not unread
+
+          const storedTs = await AsyncStorage.getItem(`${LAST_SEEN_PREFIX}${entry._id}`);
           const lastSeen = storedTs ? Number(storedTs) : 0;
-
-          const msgRes = await fetch(`${API_URL}/api/v1/messages/${f._id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!msgRes.ok) return false;
-          const msgs: any[] = await msgRes.json();
-          if (!Array.isArray(msgs) || msgs.length === 0) return false;
-
-          const latest = msgs[msgs.length - 1];
-          const latestTs = new Date(latest.createdAt).getTime();
-          const senderId =
-            typeof latest.sender === "object"
-              ? latest.sender?._id?.toString()
-              : latest.sender?.toString();
-
-          return latestTs > lastSeen && senderId !== myId;
+          return new Date(entry.latestAt).getTime() > lastSeen;
         })
       );
 

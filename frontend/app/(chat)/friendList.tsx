@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
 import { decodeJWT } from "@/utils/jwt";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -34,9 +33,7 @@ function formatTime(isoString: string): string {
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
   if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) {
-    return date.toLocaleDateString([], { weekday: "short" });
-  }
+  if (diffDays < 7) return date.toLocaleDateString([], { weekday: "short" });
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
@@ -49,62 +46,48 @@ export default function FriendList() {
   const loadChats = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("authToken");
-      if (!token) throw new Error("Token not found");
+      if (!token) return;
 
       const decoded: any = decodeJWT(token);
       const myId = decoded?.id?.toString();
       setCurrentUserId(myId ?? null);
 
-      const { data } = await axios.get(`${API_URL}/api/v1/friends/list-friends`, {
+      // Single request — backend joins friendships + last message in one aggregation
+      const res = await fetch(`${API_URL}/api/v1/friends/conversations`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) return;
+      const { data: conversations = [] } = await res.json();
 
-      const friendships: any[] = data.data || [];
-
+      // Determine unread status client-side using cached AsyncStorage timestamps
       const chatRows: ChatRow[] = await Promise.all(
-        friendships.map(async (f: any) => {
+        conversations.map(async (conv: any) => {
           const user1Id =
-            f.user1?.user?._id?.toString() ?? f.user1?.user?.toString();
-          const otherUser = user1Id === myId ? f.user2 : f.user1;
+            conv.user1?.user?._id?.toString() ?? conv.user1?.user?.toString();
+          const otherUser = user1Id === myId ? conv.user2 : conv.user1;
 
-          // Fetch messages for this conversation
           let lastMessage: ChatRow["lastMessage"] = null;
-          try {
-            const msgRes = await axios.get(
-              `${API_URL}/api/v1/messages/${f._id}`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
-            const msgs: any[] = msgRes.data;
-            if (Array.isArray(msgs) && msgs.length > 0) {
-              const latest = msgs[msgs.length - 1];
-              lastMessage = {
-                content: latest.content ?? "",
-                sender:
-                  typeof latest.sender === "object"
-                    ? latest.sender?._id?.toString() ?? ""
-                    : latest.sender?.toString() ?? "",
-                createdAt: latest.createdAt,
-              };
-            }
-          } catch {
-            // leave lastMessage as null if fetch fails
+          if (conv.lastMessage) {
+            lastMessage = {
+              content: conv.lastMessage.content ?? "",
+              sender: conv.lastMessage.sender?.toString() ?? "",
+              createdAt: conv.lastMessage.createdAt,
+            };
           }
 
-          // Check unread: last message is newer than our last-seen timestamp
           let isUnread = false;
           if (lastMessage && lastMessage.sender !== myId) {
             const storedTs = await AsyncStorage.getItem(
-              `${LAST_SEEN_PREFIX}${f._id}`
+              `${LAST_SEEN_PREFIX}${conv._id}`
             );
             const lastSeen = storedTs ? Number(storedTs) : 0;
             isUnread = new Date(lastMessage.createdAt).getTime() > lastSeen;
           }
 
-          return { friendshipId: f._id, otherUser, lastMessage, isUnread };
+          return { friendshipId: conv._id, otherUser, lastMessage, isUnread };
         })
       );
 
-      // Sort: conversations with messages first, then by newest message
       chatRows.sort((a, b) => {
         if (!a.lastMessage && !b.lastMessage) return 0;
         if (!a.lastMessage) return 1;
@@ -123,7 +106,6 @@ export default function FriendList() {
     }
   }, []);
 
-  useEffect(() => { loadChats(); }, [loadChats]);
   useFocusEffect(useCallback(() => { loadChats(); }, [loadChats]));
 
   const renderItem = ({ item }: { item: ChatRow }) => {
@@ -133,9 +115,7 @@ export default function FriendList() {
 
     let preview = "No messages yet";
     if (lastMessage) {
-      preview = isFromMe
-        ? `You: ${lastMessage.content}`
-        : lastMessage.content;
+      preview = isFromMe ? `You: ${lastMessage.content}` : lastMessage.content;
     }
 
     return (
@@ -146,7 +126,6 @@ export default function FriendList() {
         style={[styles.row, isUnread && styles.rowUnread]}
         activeOpacity={0.75}
       >
-        {/* Avatar */}
         <View style={styles.avatarWrap}>
           {avatarUri ? (
             <Image source={{ uri: avatarUri }} style={styles.avatar} />
@@ -158,7 +137,6 @@ export default function FriendList() {
           {isUnread && <View style={styles.unreadDot} />}
         </View>
 
-        {/* Text */}
         <View style={styles.textWrap}>
           <View style={styles.topRow}>
             <Text
@@ -186,7 +164,6 @@ export default function FriendList() {
 
   return (
     <SafeAreaView style={styles.root}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Messages</Text>
         <Text style={styles.headerSub}>

@@ -40,7 +40,6 @@ const GymLevelScreen = () => {
   const handleNext = () => {
     if (selectedLevel) {
       updateOnboardingData({ skill_level: selectedLevel });
-      console.log("current onboarding data", onboardingData);
       router.push("/tags");
     } else {
       alert("Please select your gym level.");

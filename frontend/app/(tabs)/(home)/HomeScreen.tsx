@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   Dimensions,
   Animated,
@@ -18,8 +18,8 @@ import { decodeJWT } from '@/utils/jwt';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-import RatingArenas from '../../components/homepage/RatingArenas';
-import CategoryGrid from '../../components/homepage/CategoryGrid';
+// import RatingArenas from '../../components/homepage/RatingArenas';
+// import CategoryGrid from '../../components/homepage/CategoryGrid';
 import GymList from '../../components/homepage/GymList';
 import Sidebar from '../../components/sideBar';
 import SearchBar from '../../components/SearchBar';
@@ -56,12 +56,6 @@ const HomeScreen = () => {
     })();
   }, []);
 
-  const sections = useMemo(() => [
-    { key: 'activity', render: () => <DailyTasks /> },
-    { key: 'rating', render: () => <RatingArenas /> },
-    { key: 'category', render: () => <CategoryGrid onSelect={setSelectedCategory} /> },
-    { key: 'gyms', render: () => <GymList searchQuery={searchQuery} categoryFilter={selectedCategory} /> },
-  ], [searchQuery, selectedCategory]);
 
   const animateSidebar = useCallback((open: boolean) => {
     Animated.parallel([
@@ -99,9 +93,6 @@ const HomeScreen = () => {
     }
   }), []);
 
-  const handleSearch = () => {
-    console.log('Searching for:', searchQuery);
-  };
 
   const renderHeader = useCallback(() => (
     <View className="bg-primary">
@@ -119,7 +110,7 @@ const HomeScreen = () => {
             onChange={setSearchQuery}
             onClear={() => setSearchQuery('')}
             placeholder="Search gyms, facilities..."
-            onSubmit={handleSearch}
+            onSubmit={() => {}}
           />
         </View>
 
@@ -162,19 +153,15 @@ const HomeScreen = () => {
     <SafeAreaView className="flex-1 bg-primary">
       {renderHeader()}
 
-      <FlatList
-        data={sections}
-        keyExtractor={(item) => item.key}
-        renderItem={({ item }) => (
-          <View className="mb-2 px-1">{item.render()}</View>
-        )}
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 16 }}
-        initialNumToRender={2}
-        maxToRenderPerBatch={2}
-        windowSize={4}
-        removeClippedSubviews
-      />
+      >
+        <DailyTasks />
+        {/* <RatingArenas /> */}
+        {/* <CategoryGrid onSelect={setSelectedCategory} /> */}
+        <GymList searchQuery={searchQuery} categoryFilter={selectedCategory} />
+      </ScrollView>
 
       {/* Sidebar & Blur Overlay */}
       {isSidebarOpen && (

@@ -1,14 +1,14 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
-  Image,
   Dimensions,
   TouchableOpacity,
   FlatList,
   NativeSyntheticEvent,
   NativeScrollEvent,
 } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -47,6 +47,8 @@ const GymCard = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [favorite, setFavorite] = useState(isFavorite);
 
+  useEffect(() => { setFavorite(isFavorite); }, [isFavorite]);
+
   const handleFavoritePress = () => {
     setFavorite(!favorite);
     if (onFavoritePress) onFavoritePress();
@@ -78,6 +80,7 @@ const GymCard = ({
           keyExtractor={(_, i) => String(i)}
           horizontal
           pagingEnabled
+          initialNumToRender={1}
           showsHorizontalScrollIndicator={false}
           scrollEventThrottle={16}
           onScroll={handleScroll}
@@ -86,7 +89,7 @@ const GymCard = ({
               <Image
                 source={{ uri: item }}
                 style={{ width: IMAGE_WIDTH, height: IMAGE_HEIGHT }}
-                resizeMode="cover"
+                contentFit="cover"
               />
               <LinearGradient
                 colors={["transparent", "rgba(0,0,0,0.7)"]}

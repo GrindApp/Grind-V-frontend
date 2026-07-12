@@ -11,6 +11,8 @@ import {
   Alert,
   UIManager,
   ActivityIndicator,
+  Modal,
+  Pressable,
 } from "react-native";
 import { SkeletonBox } from "@/app/components/SkeletonBox";
 import Slider from "@react-native-community/slider";
@@ -25,6 +27,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import useLogout from "../(auth)/logout";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -48,6 +51,9 @@ const SKILL_REVERSE: Record<string, GymLevel> = {
 };
 
 const SettingsScreen = () => {
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const logout = useLogout();
+
   // Profile meta
   const [userId, setUserId] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -500,8 +506,75 @@ const SettingsScreen = () => {
           </View>
         )}
 
+        {/* Log Out */}
+        <TouchableOpacity
+          onPress={() => setLogoutModalVisible(true)}
+          activeOpacity={0.8}
+          className="flex-row items-center bg-[#1C1C1E] px-5 py-4 rounded-2xl mb-4"
+        >
+          <View className="w-8 h-8 rounded-full bg-red-500/10 items-center justify-center mr-3">
+            <Ionicons name="log-out-outline" size={18} color="#EF4444" />
+          </View>
+          <Text className="flex-1 text-red-500 font-medium text-base">Log Out</Text>
+          <Ionicons name="chevron-forward" size={16} color="#EF4444" />
+        </TouchableOpacity>
+
         <View className="h-12" />
       </ScrollView>
+
+      {/* Logout Confirmation Modal */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={logoutModalVisible}
+        onRequestClose={() => setLogoutModalVisible(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center" }}
+          onPress={() => setLogoutModalVisible(false)}
+        >
+          <Pressable
+            style={{ backgroundColor: "#2C2C2E", borderRadius: 16, padding: 28, width: "82%", alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 20 }}
+            onPress={() => {}}
+          >
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(239,68,68,0.12)", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+              <Ionicons name="log-out-outline" size={32} color="#EF4444" />
+            </View>
+
+            <Text style={{ fontSize: 18, fontWeight: "bold", color: "#E0E0E0", marginBottom: 12 }}>
+              Log Out?
+            </Text>
+            <Text style={{ fontSize: 16, color: "#AAAAAA", textAlign: "center", marginBottom: 24 }}>
+              You'll need to sign back in to access your account.
+            </Text>
+
+            <View style={{ flexDirection: "row", justifyContent: "space-between", width: "100%" }}>
+              <Pressable
+                style={({ pressed }) => [
+                  { flex: 1, backgroundColor: "#3A3A3C", paddingVertical: 12, paddingHorizontal: 20, borderRadius: 8, alignItems: "center", justifyContent: "center", marginHorizontal: 5 },
+                  pressed && { opacity: 0.75 },
+                ]}
+                onPress={() => setLogoutModalVisible(false)}
+              >
+                <Text style={{ color: "#E0E0E0", fontWeight: "500" }}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  { flex: 1, backgroundColor: "#FF3B30", paddingVertical: 12, paddingHorizontal: 20, borderRadius: 8, alignItems: "center", justifyContent: "center", marginHorizontal: 5 },
+                  pressed && { opacity: 0.75 },
+                ]}
+                onPress={() => {
+                  setLogoutModalVisible(false);
+                  logout();
+                }}
+              >
+                <Text style={{ color: "#FFFFFF", fontWeight: "600" }}>Log Out</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 };

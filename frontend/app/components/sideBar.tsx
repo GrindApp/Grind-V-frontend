@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,13 +6,10 @@ import {
   ScrollView,
   Dimensions,
   StyleSheet,
-  Modal,
-  Pressable,
 } from "react-native";
-import { Ionicons, MaterialIcons, Feather } from "@expo/vector-icons";
+import { Ionicons, Feather } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import useLogout from "../(auth)/logout";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
@@ -22,10 +19,8 @@ type SidebarProps = {
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
-  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const router = useRouter();
   const screenHeight = Dimensions.get("window").height;
-  const logout = useLogout();
 
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -55,13 +50,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
   useEffect(() => {
     fetchPendingCount();
   }, []);
-
-  const handleLogout = () => {
-    // Implement your logout logic here
-    setLogoutModalVisible(false);
-    // After logout, you may want to navigate to login screen
-    router.push("/(auth)/login");
-  };
 
   const menuItems = [
     {
@@ -146,16 +134,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
             </TouchableOpacity>
           ))}
 
-          {/* Logout Button */}
-          <TouchableOpacity
-            style={[styles.menuItem, styles.logoutButton]}
-            onPress={() => setLogoutModalVisible(true)}
-          >
-            <View style={styles.menuItemContent}>
-              <Ionicons name="log-out-outline" size={24} color="#FF3B30" />
-              <Text style={styles.logoutText}>Log Out</Text>
-            </View>
-          </TouchableOpacity>
         </ScrollView>
 
         {/* Footer */}
@@ -163,41 +141,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose }) => {
           <Text style={styles.footerText}>© GRIND ASSOCIATION 2024</Text>
         </View>
 
-        {/* Logout Confirmation Modal */}
-        <Modal
-          animationType="fade"
-          transparent={true}
-          visible={logoutModalVisible}
-          onRequestClose={() => setLogoutModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Logout Confirmation</Text>
-              <Text style={styles.modalMessage}>
-                Are you sure you want to log out?
-              </Text>
-
-              <View style={styles.modalButtons}>
-                <Pressable
-                  className="bg-gray-200 px-4 py-2 rounded-md"
-                  onPress={() => setLogoutModalVisible(false)}
-                >
-                  <Text>Cancel</Text>
-                </Pressable>
-
-                <Pressable
-                  className="bg-red-500 px-4 py-2 rounded-md"
-                  onPress={() => {
-                    setLogoutModalVisible(false);
-                    logout();
-                  }}
-                >
-                  <Text className="text-white">Log Out</Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -262,15 +205,6 @@ const styles = StyleSheet.create({
     color: "#E0E0E0",
     fontWeight: "500",
   },
-  logoutButton: {
-    marginTop: 20,
-  },
-  logoutText: {
-    marginLeft: 20,
-    fontSize: 16,
-    color: "#FF3B30",
-    fontWeight: "500",
-  },
   footer: {
     marginTop: 20,
     paddingVertical: 20,
@@ -281,59 +215,6 @@ const styles = StyleSheet.create({
   footerText: {
     color: "#8E8E93",
     fontSize: 12,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    backgroundColor: "#2C2C2E",
-    borderRadius: 12,
-    padding: 24,
-    width: "80%",
-    alignItems: "center",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#E0E0E0",
-    marginBottom: 12,
-  },
-  modalMessage: {
-    fontSize: 16,
-    color: "#AAAAAA",
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-  },
-  modalButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    flex: 1,
-    marginHorizontal: 5,
-  },
-  cancelButton: {
-    backgroundColor: "#3A3A3C",
-  },
-  cancelButtonText: {
-    color: "#E0E0E0",
-    fontWeight: "500",
-  },
-  logoutConfirmButton: {
-    backgroundColor: "#FF3B30",
-  },
-  logoutConfirmText: {
-    color: "#FFFFFF",
-    fontWeight: "600",
   },
 });
 

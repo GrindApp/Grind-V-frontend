@@ -8,12 +8,14 @@ import {
   Platform,
   ScrollView,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from "expo-router";
+import { router } from 'expo-router';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 const QueryScreen = () => {
   const [name, setName] = useState('');
@@ -21,7 +23,9 @@ const QueryScreen = () => {
   const [subject, setSubject] = useState('');
   const [query, setQuery] = useState('');
   const [activeField, setActiveField] = useState<string | null>(null);
-  const navigation = useNavigation();
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Form validation
   const isEmailValid = () => {
@@ -31,17 +35,24 @@ const QueryScreen = () => {
 
   const isFormValid = name && email && isEmailValid() && subject && query;
 
-  const handleSubmit = () => {
-    if (isFormValid) {
-      // Handle submission logic
-      console.log('Form submitted:', { name, email, subject, query });
-      // Show success feedback
-      alert('Your query has been submitted successfully!');
-      // Reset form
-      setName('');
-      setEmail('');
-      setSubject('');
-      setQuery('');
+  const handleSubmit = async () => {
+    if (!isFormValid) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/support/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, subject, message: query }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Something went wrong.');
+      setSubmitted(true);
+      setName(''); setEmail(''); setSubject(''); setQuery('');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -108,35 +119,34 @@ const QueryScreen = () => {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#18181B' }}>
-      
-      <StatusBar barStyle="light-content" />
-      <LinearGradient
-        colors={["#18181B", "#09090B"]}
-        style={{ position: 'absolute', inset: 0 }}
-      />
-      
-      {/* Header */}
-       <View className="flex-row items-center mb-6 space-x-4">
-        <TouchableOpacity 
-          onPress={() => router.back()}
-          className="p-2 bg-zinc-800/80 rounded-full ml-3"
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-back" size={18} color="white" />
-        </TouchableOpacity>
-        
-        <Text className="text-white text-2xl font-bold"> Support</Text>
-      </View>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#18181B' }}>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={100}
-        style={{ flex: 1 }}
-      >
-        <ScrollView 
-          showsVerticalScrollIndicator={false} 
-          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+        <StatusBar barStyle="light-content" />
+        <LinearGradient
+          colors={["#18181B", "#09090B"]}
+          style={{ position: 'absolute', inset: 0 }}
+        />
+
+        {/* Header */}
+        <View className="flex-row items-center mb-6 space-x-4">
+          <TouchableOpacity
+            onPress={() => router.back()}
+            className="p-2 bg-zinc-800/80 rounded-full ml-3"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chevron-back" size={18} color="white" />
+          </TouchableOpacity>
+          <Text className="text-white text-2xl font-bold"> Support</Text>
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 60 }}
         >
           {/* Support message */}
           <View style={{ backgroundColor: '#2A2A2A', borderRadius: 12, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: '#3D3D3D' }}>
@@ -148,6 +158,22 @@ const QueryScreen = () => {
               Complete the form below and our support team will get back to you within 24-48 hours.
             </Text>
           </View>
+
+          {/* Success banner */}
+          {submitted && (
+            <View style={{ backgroundColor: '#052e16', borderRadius: 12, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#16a34a', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+              <Text style={{ color: '#22c55e', fontSize: 14, fontWeight: '600', flex: 1 }}>Query sent! We'll get back to you within 24-48 hours.</Text>
+            </View>
+          )}
+
+          {/* Error banner */}
+          {error && (
+            <View style={{ backgroundColor: '#2d0a0a', borderRadius: 12, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#F43F5E', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Ionicons name="alert-circle" size={20} color="#F43F5E" />
+              <Text style={{ color: '#F43F5E', fontSize: 14, flex: 1 }}>{error}</Text>
+            </View>
+          )}
 
           {/* Form fields */}
           <View>
@@ -198,29 +224,31 @@ const QueryScreen = () => {
               marginTop: 24,
               paddingVertical: 16,
               borderRadius: 12,
-              backgroundColor: isFormValid ? '#EF4444' : '#3D3D3D',
+              backgroundColor: isFormValid && !loading ? '#EF4444' : '#3D3D3D',
               alignItems: 'center',
-              shadowColor: isFormValid ? "#accent" : "#000",
-              shadowOpacity: isFormValid ? 0.3 : 0.2,
-              shadowRadius: 10,
-              shadowOffset: { width: 0, height: 5 },
+              flexDirection: 'row',
+              justifyContent: 'center',
+              gap: 8,
             }}
             onPress={handleSubmit}
-            disabled={!isFormValid}
+            disabled={!isFormValid || loading}
           >
-            <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>SUBMIT QUERY</Text>
+            {loading
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>SUBMIT QUERY</Text>
+            }
           </TouchableOpacity>
           
           {/* Alternative contact method */}
           <View style={{ marginTop: 24, alignItems: 'center' }}>
             <Text style={{ color: '#A3A3A3', fontSize: 14 }}>Or contact us directly at</Text>
             <TouchableOpacity>
-              <Text style={{ color: '#F43F5E', fontWeight: '600', fontSize: 14 }}>support@fitnessapp.com</Text>
+              <Text style={{ color: '#F43F5E', fontWeight: '600', fontSize: 14 }}>gymbuddyapp1016@gmail.com</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 

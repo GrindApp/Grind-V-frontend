@@ -134,7 +134,7 @@ const GymBuddyScreen = () => {
     requests: [],
     added: [],
   });
-  const [activeTab, setActiveTab] = useState<TabType>("requests");
+  const [activeTab, setActiveTab] = useState<TabType>("added");
   const [loading, setLoading] = useState(true);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const tabAnim = useRef(new Animated.Value(0)).current;
@@ -228,7 +228,7 @@ const GymBuddyScreen = () => {
     Animated.timing(fadeAnim, { toValue: 0, duration: 100, useNativeDriver: true }).start(() => {
       setActiveTab(tab);
       Animated.timing(tabAnim, {
-        toValue: tab === "requests" ? 0 : 1,
+        toValue: tab === "added" ? 0 : 1,
         duration: 220,
         useNativeDriver: false,
       }).start();
@@ -283,7 +283,7 @@ const GymBuddyScreen = () => {
         {/* Tab bar */}
         <View style={s.tabBar}>
           <Animated.View style={[s.tabIndicator, { left: indicatorLeft, width: tabHalfW }]} />
-          {(["requests", "added"] as TabType[]).map((tab) => {
+          {(["added", "requests"] as TabType[]).map((tab) => {
             const isActive = activeTab === tab;
             const count = tab === "requests" ? buddies.requests.length : buddies.added.length;
             return (

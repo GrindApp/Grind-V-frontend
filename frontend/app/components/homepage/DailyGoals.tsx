@@ -11,6 +11,8 @@ import { decodeJWT } from '@/utils/jwt';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const CARD_W = Dimensions.get('window').width - 32;
+const CACHE_KEY = 'dailyTasks_cache';
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 // Fixed heights so the card never grows
 const HEADER_H = 38;
@@ -52,7 +54,7 @@ function Heatmap({ map, year, month, loading }: {
   }
   while (cells.length % 7 !== 0) cells.push({ day: null, pct: null, isToday: false, isFuture: false });
 
-  const gap      = 3;
+  const gap      = 5;
   const innerW   = CARD_W - 24;
   const cellSize = Math.floor((innerW - gap * 6) / 7);
 
@@ -96,7 +98,7 @@ function Heatmap({ map, year, month, loading }: {
             if (!cell.day) return <View key={`e-${i}`} style={{ width: cellSize, height: cellSize }} />;
             return (
               <View key={cell.day} style={{
-                width: cellSize, height: cellSize, borderRadius: 4,
+                width: cellSize, height: cellSize, borderRadius: 3,
                 backgroundColor: heatColor(cell.pct, cell.isFuture),
                 alignItems: 'center', justifyContent: 'center',
                 borderWidth: cell.isToday ? 1.5 : 0, borderColor: '#A78BFA',
@@ -142,6 +144,17 @@ const DailyTasks: React.FC = () => {
         if (!uid) throw new Error('Invalid token');
         setUserId(uid);
 
+        // Serve from cache if fresh
+        const cached = await AsyncStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const { ts, tasks: cachedTasks, uid: cachedUid } = JSON.parse(cached);
+          if (cachedUid === uid && Date.now() - ts < CACHE_TTL_MS) {
+            setTasks(cachedTasks);
+            if (cachedTasks.length === 1 && cachedTasks[0].name.toLowerCase().includes('rest day')) setIsRestDay(true);
+            setLoading(false);
+          }
+        }
+
         const [tRes, hRes] = await Promise.all([
           fetch(`${API_URL}/api/v1/user-tasks/daily/${uid}`, { headers: { Authorization: `Bearer ${t}` } }),
           fetch(`${API_URL}/api/v1/user-tasks/monthly/${uid}?year=${yr}&month=${mo}`, { headers: { Authorization: `Bearer ${t}` } }),
@@ -152,6 +165,8 @@ const DailyTasks: React.FC = () => {
         setTasks(taskList);
         if (taskList.length === 1 && taskList[0].name.toLowerCase().includes('rest day')) setIsRestDay(true);
         if (hRes.ok) setMap((await hRes.json()).data ?? {});
+
+        await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), tasks: taskList, uid }));
       } catch (e: any) {
         setError(e.message);
       } finally {
@@ -179,6 +194,8 @@ const DailyTasks: React.FC = () => {
         }
         const d = now.getDate(), total = updated.length, done = updated.filter(t => t.completed).length;
         setMap(p => ({ ...p, [d]: total > 0 ? Math.round((done / total) * 100) : 0 }));
+        // Invalidate cache so next mount reflects updated tasks
+        if (userId) await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), tasks: updated, uid: userId }));
       }
     } catch { /* optimistic stays */ } finally { setCompleting(null); }
   };

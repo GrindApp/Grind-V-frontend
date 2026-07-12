@@ -90,7 +90,6 @@ const FinalWelcomeScreen = () => {
       });
 
       const rawText = await res1.text();
-      console.log("Profile API raw response:", rawText);
 
       let profileRes;
       try {

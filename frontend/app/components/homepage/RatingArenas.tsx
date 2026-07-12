@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, FlatList, TouchableOpacity, ActivityIndicator } from "react-native";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { fetchGyms } from "@/apis/gyms";
 
@@ -42,8 +43,6 @@ const RatingArenas = () => {
 
   const handleGymPress = (gym: GymItemType) => {
     const gymId = gym._id || gym.id;
-    console.log("Navigating to gym profile with ID:", gymId);
-
     router.push({
       pathname: "/(tabs)/(home)/gym-profile",
       params: { gymId },
@@ -76,9 +75,9 @@ const RatingArenas = () => {
               onPress={() => handleGymPress(item)}
             >
               <Image
-                source={{ uri: item.imageUrls?.[0] || "https://via.placeholder.com/300" }}
-                className="w-full h-28 rounded-xl mb-3"
-                resizeMode="cover"
+                source={{ uri: item.imageUrls?.[0] }}
+                style={{ width: "100%", height: 112, borderRadius: 12, marginBottom: 12 }}
+                contentFit="cover"
               />
               <Text className="text-white font-semibold text-sm mb-1" numberOfLines={1}>
                 {item.name}

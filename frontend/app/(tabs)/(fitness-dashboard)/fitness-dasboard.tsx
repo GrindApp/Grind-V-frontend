@@ -90,9 +90,10 @@ export default function LorePage() {
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'plan' | 'volume'>('plan');
   const [loading, setLoading] = useState(true);
+  const [profileFitnessLevel, setProfileFitnessLevel] = useState('');
 
   // Form state
-  const [step, setStep] = useState(0); // 0=level, 1=goal, 2=schedule, 3=location, 4=health, 5=plans
+  const [step, setStep] = useState(1); // 1=goal, 2=schedule, 3=location, 4=health, 5=plans
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [templates, setTemplates] = useState<any[]>([]);
   const [fetchingPlans, setFetchingPlans] = useState(false);
@@ -109,12 +110,22 @@ export default function LorePage() {
         const uid = decoded?.id;
         setUserId(uid);
 
-        const res = await fetch(`${API_URL}/api/v1/workout-plan/${uid}`, {
-          headers: { Authorization: `Bearer ${t}` },
-        });
-        const data = await res.json();
+        const [planRes, profileRes] = await Promise.all([
+          fetch(`${API_URL}/api/v1/workout-plan/${uid}`, {
+            headers: { Authorization: `Bearer ${t}` },
+          }),
+          fetch(`${API_URL}/api/v1/userProfile/user/${uid}`, {
+            headers: { Authorization: `Bearer ${t}` },
+          }),
+        ]);
+        const data = await planRes.json();
         const plans = data.data ?? [];
         if (plans.length > 0) setActivePlan(plans[0]);
+
+        const profileData = await profileRes.json();
+        const skillLevel = profileData.data?.skill_level ?? '';
+        setProfileFitnessLevel(skillLevel);
+        setForm(f => ({ ...f, fitnessLevel: skillLevel }));
       } catch (e) {
         console.error('Error loading lore:', e);
       } finally {
@@ -158,8 +169,8 @@ export default function LorePage() {
       if (!res.ok) throw new Error(data.message);
       setActivePlan(data.data);
       setShowForm(false);
-      setStep(0);
-      setForm(INITIAL_FORM);
+      setStep(1);
+      setForm({ ...INITIAL_FORM, fitnessLevel: profileFitnessLevel });
     } catch (e: any) {
       Alert.alert('Error', e.message ?? 'Could not subscribe to plan');
     } finally {
@@ -173,7 +184,6 @@ export default function LorePage() {
   };
 
   const canProceed = () => {
-    if (step === 0) return !!form.fitnessLevel;
     if (step === 1) return !!form.goal;
     if (step === 3) return !!form.workoutLocation;
     return true;
@@ -214,8 +224,8 @@ export default function LorePage() {
         <ActivePlanView
           plan={activePlan}
           onReset={() => {
-            setStep(0);
-            setForm(INITIAL_FORM);
+            setStep(1);
+            setForm({ ...INITIAL_FORM, fitnessLevel: profileFitnessLevel });
             setTemplates([]);
             setShowForm(true);
           }}
@@ -231,7 +241,7 @@ export default function LorePage() {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        {step > 0 ? (
+        {step > 1 ? (
           <TouchableOpacity onPress={() => setStep(s => s - 1)} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={22} color="#fff" />
           </TouchableOpacity>
@@ -246,40 +256,15 @@ export default function LorePage() {
             {activePlan ? 'Choose a new plan' : 'Build your fitness identity'}
           </Text>
         </View>
-        <Text style={styles.stepIndicator}>{step + 1} / 6</Text>
+        <Text style={styles.stepIndicator}>{step} / 5</Text>
       </View>
 
       {/* Progress bar */}
       <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${((step + 1) / 6) * 100}%` }]} />
+        <View style={[styles.progressFill, { width: `${(step / 5) * 100}%` }]} />
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
-        {/* Step 0 — Fitness Level */}
-        {step === 0 && (
-          <View>
-            <Text style={styles.stepTitle}>What's your fitness level?</Text>
-            <Text style={styles.stepSub}>We'll tailor your plan to match your experience.</Text>
-            {LEVELS.map(l => (
-              <TouchableOpacity
-                key={l.id}
-                style={[styles.optionCard, form.fitnessLevel === l.id && styles.optionCardSelected]}
-                onPress={() => setForm(f => ({ ...f, fitnessLevel: l.id }))}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.optionIcon, form.fitnessLevel === l.id && styles.optionIconSelected]}>
-                  <Ionicons name={l.icon as any} size={22} color={form.fitnessLevel === l.id ? '#fff' : '#EF4444'} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.optionLabel}>{l.label}</Text>
-                  <Text style={styles.optionDesc}>{l.desc}</Text>
-                </View>
-                {form.fitnessLevel === l.id && <Ionicons name="checkmark-circle" size={22} color="#EF4444" />}
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
 
         {/* Step 1 — Goal */}
         {step === 1 && (

@@ -35,8 +35,6 @@ const LocationScreen = () => {
         lng: longitude,
       },
     });
-    console.log("Current context data", onboardingData);
-
     setLoading(false);
     router.push('/final-welcome');
   } catch (err) {

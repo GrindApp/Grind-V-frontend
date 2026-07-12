@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { Ionicons } from "@expo/vector-icons";
 import { decodeJWT } from "@/utils/jwt";
+import { io, Socket } from "socket.io-client";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 const { width } = Dimensions.get("window");
@@ -31,9 +32,14 @@ export default function ChatPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [hasEarlier, setHasEarlier] = useState(false);
   const [otherUser, setOtherUser] = useState<any>(null);
   const flatListRef = useRef<FlatList>(null);
+  const socketRef = useRef<Socket | null>(null);
   const { markAsRead } = useUnreadMessages();
+
+  const PAGE_SIZE = 50;
 
   const normalizeId = (id: any): string => {
     if (typeof id === "object" && id !== null) return id._id || id.id || String(id);
@@ -42,12 +48,30 @@ export default function ChatPage() {
 
   const dedupeMessages = (msgs: any[]) => {
     const seen = new Set<string>();
-    return msgs.filter(m => {
+    return msgs.filter((m) => {
       if (!m._id || seen.has(m._id)) return false;
       seen.add(m._id);
       return true;
     });
   };
+
+  const connectSocket = useCallback((token: string) => {
+    const socket = io(API_URL!, { auth: { token }, transports: ["websocket"] });
+
+    socket.on("connect", () => {
+      socket.emit("joinRoom", String(friendshipId));
+    });
+
+    socket.on("newMessage", (msg: any) => {
+      setMessages((prev) => dedupeMessages([...prev, msg]));
+    });
+
+    socket.on("chatError", (err: string) => {
+      console.error("Socket chat error:", err);
+    });
+
+    socketRef.current = socket;
+  }, [friendshipId]);
 
   useEffect(() => {
     const init = async () => {
@@ -63,7 +87,7 @@ export default function ChatPage() {
           axios.get(`${API_URL}/api/v1/friends/list-friends`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
-          axios.get(`${API_URL}/api/v1/messages/${friendshipId}`, {
+          axios.get(`${API_URL}/api/v1/messages/${friendshipId}?limit=${PAGE_SIZE}`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
         ]);
@@ -72,13 +96,19 @@ export default function ChatPage() {
           (f: any) => f._id === friendshipId
         );
         if (friendship) {
-          const user1Id = friendship.user1?.user?._id?.toString() ?? friendship.user1?.user?.toString();
+          const user1Id =
+            friendship.user1?.user?._id?.toString() ??
+            friendship.user1?.user?.toString();
           const other = user1Id === userId ? friendship.user2 : friendship.user1;
           setOtherUser(other);
         }
 
-        setMessages(dedupeMessages(messagesRes.data));
+        const fetchedMsgs = messagesRes.data;
+        setMessages(dedupeMessages(fetchedMsgs));
+        setHasEarlier(fetchedMsgs.length === PAGE_SIZE);
+
         markAsRead(String(friendshipId));
+        connectSocket(token);
       } catch (e) {
         console.error("Error initializing chat:", e);
       } finally {
@@ -87,34 +117,39 @@ export default function ChatPage() {
     };
 
     init();
+
+    return () => {
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+    };
   }, [friendshipId]);
 
-  // Poll for new messages every 3 seconds
-  useEffect(() => {
-    if (!friendshipId || !currentUserId) return;
-
-    const poll = async () => {
-      try {
-        const token = await AsyncStorage.getItem("authToken");
-        if (!token) return;
-        const res = await axios.get(`${API_URL}/api/v1/messages/${friendshipId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.data.length !== messages.length) setMessages(dedupeMessages(res.data));
-      } catch (err) {
-        console.error("Chat polling error:", err);
-      }
-    };
-
-    const interval = setInterval(poll, 3000);
-    return () => clearInterval(interval);
-  }, [friendshipId, currentUserId, messages.length]);
+  const loadEarlierMessages = async () => {
+    if (loadingEarlier || !hasEarlier || messages.length === 0) return;
+    setLoadingEarlier(true);
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      if (!token) return;
+      const oldest = messages[0]?.createdAt;
+      const res = await axios.get(
+        `${API_URL}/api/v1/messages/${friendshipId}?limit=${PAGE_SIZE}&before=${oldest}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const earlier: any[] = res.data;
+      setMessages((prev) => dedupeMessages([...earlier, ...prev]));
+      setHasEarlier(earlier.length === PAGE_SIZE);
+    } catch (e) {
+      console.error("Load earlier error:", e);
+    } finally {
+      setLoadingEarlier(false);
+    }
+  };
 
   useEffect(() => {
     if (messages.length > 0) {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
-  }, [messages]);
+  }, [messages.length]);
 
   const sendMessage = async () => {
     if (!text.trim() || isSending) return;
@@ -131,6 +166,7 @@ export default function ChatPage() {
         { friendshipId, text: messageText },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      // Server will also broadcast via socket — dedupeMessages handles the duplicate
       setMessages((prev) => dedupeMessages([...prev, res.data]));
     } catch (e) {
       console.error("Error sending message:", e);
@@ -142,7 +178,11 @@ export default function ChatPage() {
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
   };
 
   const formatDateDivider = (dateString: string) => {
@@ -150,7 +190,6 @@ export default function ChatPage() {
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-
     if (date.toDateString() === today.toDateString()) return "Today";
     if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -167,7 +206,7 @@ export default function ChatPage() {
     if (index === messages.length - 1) return true;
     const curr = new Date(messages[index].createdAt).getTime();
     const next = new Date(messages[index + 1].createdAt).getTime();
-    return next - curr > 5 * 60 * 1000; // 5 minute gap
+    return next - curr > 5 * 60 * 1000;
   };
 
   const getInitials = (user: any) => {
@@ -181,29 +220,41 @@ export default function ChatPage() {
     const showDate = shouldShowDateDivider(index);
     const showTime = shouldShowTime(index);
 
-    const prevSenderId = index > 0
-      ? normalizeId(messages[index - 1].sender?.user ?? messages[index - 1].sender)
-      : null;
+    const prevSenderId =
+      index > 0
+        ? normalizeId(messages[index - 1].sender?.user ?? messages[index - 1].sender)
+        : null;
     const isFirstInGroup = prevSenderId !== senderId;
 
     return (
       <View>
         {showDate && (
           <View style={styles.dateDivider}>
-            <Text style={styles.dateDividerText}>{formatDateDivider(item.createdAt)}</Text>
+            <Text style={styles.dateDividerText}>
+              {formatDateDivider(item.createdAt)}
+            </Text>
           </View>
         )}
 
-        <View style={[styles.messageRow, isMe ? styles.messageRowMe : styles.messageRowThem]}>
-          {/* Avatar for other user — only on first message in a group */}
+        <View
+          style={[
+            styles.messageRow,
+            isMe ? styles.messageRowMe : styles.messageRowThem,
+          ]}
+        >
           {!isMe && (
             <View style={styles.avatarSlot}>
               {isFirstInGroup ? (
                 otherUser?.imageUrl?.[0] ? (
-                  <Image source={{ uri: otherUser.imageUrl[0] }} style={styles.avatar} />
+                  <Image
+                    source={{ uri: otherUser.imageUrl[0] }}
+                    style={styles.avatar}
+                  />
                 ) : (
                   <View style={styles.avatarFallback}>
-                    <Text style={styles.avatarInitials}>{getInitials(otherUser)}</Text>
+                    <Text style={styles.avatarInitials}>
+                      {getInitials(otherUser)}
+                    </Text>
                   </View>
                 )
               ) : (
@@ -247,33 +298,39 @@ export default function ChatPage() {
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Ionicons name="chevron-back" size={24} color="#fff" />
         </TouchableOpacity>
 
         <View style={styles.headerProfile}>
           {otherUser?.imageUrl?.[0] ? (
-            <Image source={{ uri: otherUser.imageUrl[0] }} style={styles.headerAvatar} />
+            <Image
+              source={{ uri: otherUser.imageUrl[0] }}
+              style={styles.headerAvatar}
+            />
           ) : (
             <View style={[styles.headerAvatar, styles.avatarFallback]}>
               <Text style={styles.avatarInitials}>{getInitials(otherUser)}</Text>
             </View>
           )}
-          <View style={styles.onlineDot} />
         </View>
 
         <View style={styles.headerInfo}>
           <Text style={styles.headerName} numberOfLines={1}>
-            {otherUser ? `${otherUser.firstName} ${otherUser.lastName}` : "Loading..."}
+            {otherUser
+              ? `${otherUser.firstName} ${otherUser.lastName}`
+              : "Loading..."}
           </Text>
-          <Text style={styles.headerStatus}>Active now</Text>
         </View>
       </View>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
       >
         {initializing ? (
           <View style={styles.loadingContainer}>
@@ -286,12 +343,29 @@ export default function ChatPage() {
             keyExtractor={(item, index) => item._id || `msg-${index}`}
             renderItem={renderMessage}
             ListEmptyComponent={renderEmpty}
+            ListHeaderComponent={
+              hasEarlier ? (
+                <TouchableOpacity
+                  onPress={loadEarlierMessages}
+                  style={styles.loadEarlierBtn}
+                  disabled={loadingEarlier}
+                >
+                  {loadingEarlier ? (
+                    <ActivityIndicator size="small" color="#71717A" />
+                  ) : (
+                    <Text style={styles.loadEarlierText}>Load earlier messages</Text>
+                  )}
+                </TouchableOpacity>
+              ) : null
+            }
             contentContainerStyle={[
               styles.messageList,
               messages.length === 0 && { flex: 1 },
             ]}
             showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            onContentSizeChange={() =>
+              flatListRef.current?.scrollToEnd({ animated: false })
+            }
           />
         )}
 
@@ -312,7 +386,10 @@ export default function ChatPage() {
           <TouchableOpacity
             onPress={sendMessage}
             disabled={!text.trim() || isSending}
-            style={[styles.sendBtn, (!text.trim() || isSending) && styles.sendBtnDisabled]}
+            style={[
+              styles.sendBtn,
+              (!text.trim() || isSending) && styles.sendBtnDisabled,
+            ]}
             activeOpacity={0.8}
           >
             {isSending ? (
@@ -328,12 +405,8 @@ export default function ChatPage() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#09090B",
-  },
+  container: { flex: 1, backgroundColor: "#09090B" },
 
-  // Header
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -343,96 +416,43 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#27272A",
   },
-  backBtn: {
-    padding: 4,
-    marginRight: 4,
-  },
-  headerProfile: {
-    position: "relative",
-    marginRight: 10,
-  },
-  headerAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-  },
-  onlineDot: {
-    position: "absolute",
-    bottom: 1,
-    right: 1,
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    backgroundColor: "#34C759",
-    borderWidth: 2,
-    borderColor: "#09090B",
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  headerName: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
-  headerStatus: {
-    color: "#34C759",
-    fontSize: 12,
-    marginTop: 1,
-  },
+  backBtn: { padding: 4, marginRight: 4 },
+  headerProfile: { position: "relative", marginRight: 10 },
+  headerAvatar: { width: 42, height: 42, borderRadius: 21 },
+  headerInfo: { flex: 1 },
+  headerName: { color: "#fff", fontSize: 16, fontWeight: "700", letterSpacing: 0.2 },
 
-  // Messages
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+
+  loadEarlierBtn: {
     alignItems: "center",
+    paddingVertical: 12,
   },
-  messageList: {
-    paddingHorizontal: 12,
-    paddingVertical: 16,
-    gap: 2,
-  },
+  loadEarlierText: { color: "#71717A", fontSize: 13 },
+
+  messageList: { paddingHorizontal: 12, paddingVertical: 16, gap: 2 },
   messageRow: {
     flexDirection: "row",
     alignItems: "flex-end",
     marginBottom: 2,
   },
-  messageRowMe: {
-    justifyContent: "flex-end",
-  },
-  messageRowThem: {
-    justifyContent: "flex-start",
-  },
+  messageRowMe: { justifyContent: "flex-end" },
+  messageRowThem: { justifyContent: "flex-start" },
   avatarSlot: {
     width: 30,
     marginRight: 6,
     alignItems: "center",
     justifyContent: "flex-end",
   },
-  avatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-  },
+  avatar: { width: 30, height: 30, borderRadius: 15 },
   avatarFallback: {
     backgroundColor: "#EF4444",
     justifyContent: "center",
     alignItems: "center",
   },
-  avatarInitials: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  bubbleColumn: {
-    maxWidth: width * 0.72,
-  },
-  bubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
+  avatarInitials: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  bubbleColumn: { maxWidth: width * 0.72 },
+  bubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20 },
   bubbleMe: {
     backgroundColor: "#EF4444",
     borderBottomRightRadius: 5,
@@ -443,30 +463,12 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 5,
     alignSelf: "flex-start",
   },
-  bubbleText: {
-    color: "#fff",
-    fontSize: 15,
-    lineHeight: 21,
-  },
-  timeText: {
-    fontSize: 11,
-    color: "#555",
-    marginTop: 3,
-  },
-  timeMe: {
-    textAlign: "right",
-    paddingRight: 2,
-  },
-  timeThem: {
-    textAlign: "left",
-    paddingLeft: 2,
-  },
+  bubbleText: { color: "#fff", fontSize: 15, lineHeight: 21 },
+  timeText: { fontSize: 11, color: "#555", marginTop: 3 },
+  timeMe: { textAlign: "right", paddingRight: 2 },
+  timeThem: { textAlign: "left", paddingLeft: 2 },
 
-  // Date divider
-  dateDivider: {
-    alignItems: "center",
-    marginVertical: 16,
-  },
+  dateDivider: { alignItems: "center", marginVertical: 16 },
   dateDividerText: {
     color: "#71717A",
     fontSize: 12,
@@ -477,7 +479,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  // Empty state
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
@@ -485,39 +486,21 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingBottom: 60,
   },
-  emptyAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginBottom: 4,
-  },
+  emptyAvatar: { width: 80, height: 80, borderRadius: 40, marginBottom: 4 },
   avatarFallbackLarge: {
     backgroundColor: "#EF4444",
     justifyContent: "center",
     alignItems: "center",
   },
-  avatarInitialsLarge: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "700",
-  },
-  emptyName: {
-    color: "#fff",
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  emptyHint: {
-    color: "#555",
-    fontSize: 14,
-  },
+  avatarInitialsLarge: { color: "#fff", fontSize: 28, fontWeight: "700" },
+  emptyName: { color: "#fff", fontSize: 20, fontWeight: "700" },
+  emptyHint: { color: "#555", fontSize: 14 },
 
-  // Input
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
     paddingHorizontal: 12,
     paddingVertical: 10,
-    paddingBottom: Platform.OS === "ios" ? 10 : 10,
     backgroundColor: "#09090B",
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#27272A",
@@ -533,12 +516,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     maxHeight: 120,
   },
-  input: {
-    color: "#fff",
-    fontSize: 15,
-    lineHeight: 20,
-    minHeight: 20,
-  },
+  input: { color: "#fff", fontSize: 15, lineHeight: 20, minHeight: 20 },
   sendBtn: {
     width: 40,
     height: 40,
@@ -547,7 +525,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  sendBtnDisabled: {
-    backgroundColor: "#27272A",
-  },
+  sendBtnDisabled: { backgroundColor: "#27272A" },
 });

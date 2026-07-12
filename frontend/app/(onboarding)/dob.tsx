@@ -51,7 +51,6 @@ const DOBScreen = () => {
  const handleNext = () => {
   if (date && isEighteenOrOlder(date)) {
     updateOnboardingData({ dateOfBirth: date.toISOString() });
-    console.log("Current Onboarding Data:", onboardingData);
     router.push("/gender");
   } else {
     setAgeError("We're sorry, you must be at least 18 years old to use this app.");

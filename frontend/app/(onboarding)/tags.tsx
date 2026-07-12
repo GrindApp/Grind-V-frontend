@@ -72,7 +72,6 @@ const { onboardingData, updateOnboardingData } = useOnboarding();
   const handleNext = () => {
     if (selectedTags.length > 0) {
       updateOnboardingData({ interests: selectedTags });
-      console.log("Current context data", onboardingData)
       router.push('/photos_screen'); // go to next screen
     } else {
       Alert.alert('Select at least one interest');

@@ -18,7 +18,6 @@ const GenderScreen = () => {
   const handleNext = () => {
     if (selectedGender) {
       updateOnboardingData({ gender: selectedGender.toLowerCase() });
-      console.log("Current Onboarding Data:", onboardingData);
       router.push('/gym_level');
     } else {
       alert('Please select your gender.');

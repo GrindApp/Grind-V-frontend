@@ -1,8 +1,7 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   ActivityIndicator,
   Animated,
@@ -31,7 +30,7 @@ type GymItemType = {
 
 type GymListProps = {
   searchQuery?: string;
-  categoryFilter?: string | null;
+  categoryFilter?: string | null; // unused — gym schema has no `categories` field
 };
 
 const PAGE_SIZE = 10;
@@ -46,6 +45,8 @@ const GymList = ({ searchQuery = "", categoryFilter = null }: GymListProps) => {
   const [token, setToken] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState("");
   const toastOpacity = useRef(new Animated.Value(0)).current;
+  const activeSearch = useRef("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const router = useRouter();
 
@@ -128,7 +129,9 @@ const GymList = ({ searchQuery = "", categoryFilter = null }: GymListProps) => {
     if (loading || (!hasMore && !reset)) return;
     setLoading(true);
     try {
-      const data = await fetchGyms({ page: pageToLoad, pageSize: PAGE_SIZE });
+      const filters: Record<string, string> = {};
+      if (activeSearch.current.trim()) filters.name = activeSearch.current.trim();
+      const data = await fetchGyms({ page: pageToLoad, pageSize: PAGE_SIZE, filters });
       if (reset) {
         setGyms(data.results);
         setPage(2);
@@ -149,6 +152,16 @@ const GymList = ({ searchQuery = "", categoryFilter = null }: GymListProps) => {
     loadGyms(1, true);
   }, []);
 
+  // Debounce search — re-fetch from server when searchQuery changes
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      activeSearch.current = searchQuery;
+      loadGyms(1, true);
+    }, 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [searchQuery]);
+
   const handleLoadMore = () => {
     if (!loading && hasMore) loadGyms(page);
   };
@@ -159,25 +172,6 @@ const GymList = ({ searchQuery = "", categoryFilter = null }: GymListProps) => {
       params: { gymId: gym._id || gym.id },
     });
   };
-
-  const displayedGyms = useMemo(() => {
-    let result = gyms;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (g) =>
-          g.name?.toLowerCase().includes(q) ||
-          g.location?.toLowerCase().includes(q)
-      );
-    }
-    if (categoryFilter) {
-      const cat = categoryFilter.toLowerCase();
-      result = result.filter((g) =>
-        g.categories?.some((c) => c.toLowerCase().includes(cat))
-      );
-    }
-    return result;
-  }, [gyms, searchQuery, categoryFilter]);
 
   const renderGymItem = ({ item }: { item: GymItemType }) => (
     <GymCard
@@ -204,25 +198,29 @@ const GymList = ({ searchQuery = "", categoryFilter = null }: GymListProps) => {
         </TouchableOpacity>
       </View>
 
-      {displayedGyms.length > 0 ? (
-        <FlatList
-          data={displayedGyms}
-          renderItem={renderGymItem}
-          keyExtractor={(item, index) =>
-            item._id?.toString() || item.id?.toString() || index.toString()
-          }
-          showsVerticalScrollIndicator={false}
-          onEndReached={handleLoadMore}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={
-            loading ? (
-              <ActivityIndicator size="small" color="#fff" style={{ marginVertical: 16 }} />
-            ) : !hasMore && displayedGyms.length > 0 ? (
-              <Text className="text-gray-400 text-center py-4">No more gyms to load</Text>
-            ) : null
-          }
-          contentContainerStyle={{ paddingBottom: 20 }}
-        />
+      {gyms.length > 0 ? (
+        <View>
+          {gyms.map((item, index) => (
+            <View key={item._id?.toString() || item.id?.toString() || String(index)}>
+              {renderGymItem({ item })}
+            </View>
+          ))}
+          {hasMore ? (
+            <TouchableOpacity
+              onPress={handleLoadMore}
+              disabled={loading}
+              style={{ alignItems: "center", paddingVertical: 12 }}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text className="text-gray-400 text-sm font-medium">Load more gyms</Text>
+              )}
+            </TouchableOpacity>
+          ) : gyms.length > 0 ? (
+            <Text className="text-gray-400 text-center py-4">No more gyms to load</Text>
+          ) : null}
+        </View>
       ) : loading ? (
         <View className="bg-[#262629] rounded-lg mx-4 p-4 items-center">
           <ActivityIndicator size="small" color="#fff" />

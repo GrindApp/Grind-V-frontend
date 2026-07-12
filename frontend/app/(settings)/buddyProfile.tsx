@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,9 @@ import {
   Alert,
   Dimensions,
   StyleSheet,
+  Modal,
+  StatusBar,
+  FlatList,
 } from "react-native";
 import { SkeletonBox } from "@/app/components/SkeletonBox";
 import { Image } from "expo-image";
@@ -17,7 +20,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
-const { height } = Dimensions.get("window");
+const { width: screenWidth, height } = Dimensions.get("window");
 const HERO_HEIGHT = height * 0.52;
 
 const SKILL_LABELS: Record<string, string> = {
@@ -64,6 +67,8 @@ const BuddyProfile = () => {
   const [loading, setLoading] = useState(true);
   const [friendStatus, setFriendStatus] = useState(status);
   const [accepting, setAccepting] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -173,7 +178,8 @@ const BuddyProfile = () => {
     : name ?? "Buddy";
   const heroImage =
     profile?.imageUrl?.[0] || image || "https://placehold.co/600x800/1C1C1E/ffffff?text=No+Photo";
-  const grindImage = profile?.imageUrl?.[1];
+  const allPhotos = [heroImage, ...(profile?.imageUrl ?? []).slice(1)];
+  const extraPhotos = allPhotos.slice(1);
   const username = profile?.user?.username;
   const skillLevel = profile?.skill_level ?? "beginner";
   const age = getAge(profile?.dateOfBirth);
@@ -187,7 +193,7 @@ const BuddyProfile = () => {
         bounces
       >
         {/* ─── Hero Image ─── */}
-        <View style={{ height: HERO_HEIGHT }}>
+        <TouchableOpacity activeOpacity={0.95} onPress={() => setLightboxIndex(0)} style={{ height: HERO_HEIGHT }}>
           <Image
             source={heroImage}
             style={StyleSheet.absoluteFill}
@@ -251,7 +257,7 @@ const BuddyProfile = () => {
               )}
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* ─── Content Card ─── */}
         <View style={styles.contentCard}>
@@ -307,24 +313,35 @@ const BuddyProfile = () => {
             )}
           </View>
 
-          {/* Grind Image (second photo) */}
-          {grindImage ? (
+          {/* Extra photos grid (all photos after the hero) */}
+          {extraPhotos.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>Grind Shot</Text>
-              <View style={styles.grindImageWrap}>
-                <Image
-                  source={grindImage}
-                  style={styles.grindImage}
-                  contentFit="cover"
-                  transition={200}
-                />
-                <LinearGradient
-                  colors={["transparent", "rgba(0,0,0,0.4)"]}
-                  style={StyleSheet.absoluteFill}
-                />
+              <Text style={styles.sectionLabel}>Photos</Text>
+              <View style={styles.photoGrid}>
+                {extraPhotos.map((uri, i) => {
+                  const GAP = 6;
+                  const COLS = extraPhotos.length === 1 ? 1 : 3;
+                  const cellW = (screenWidth - 40 - GAP * (COLS - 1)) / COLS;
+                  const cellH = COLS === 1 ? cellW * (3 / 4) : cellW * (4 / 3);
+                  return (
+                    <TouchableOpacity
+                      key={i}
+                      activeOpacity={0.85}
+                      onPress={() => setLightboxIndex(i + 1)}
+                      style={{ width: cellW, height: cellH, borderRadius: 12, marginBottom: GAP, overflow: "hidden" }}
+                    >
+                      <Image
+                        source={{ uri }}
+                        style={{ width: "100%", height: "100%" }}
+                        contentFit="cover"
+                        transition={200}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
-          ) : null}
+          )}
 
           {/* Action buttons */}
           <View style={styles.actions}>
@@ -358,6 +375,64 @@ const BuddyProfile = () => {
           <View style={{ height: 32 }} />
         </View>
       </ScrollView>
+
+      {/* ─── Lightbox ─── */}
+      <Modal
+        visible={lightboxIndex !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLightboxIndex(null)}
+        onShow={() => {
+          if (lightboxIndex !== null && flatListRef.current) {
+            flatListRef.current.scrollToIndex({ index: lightboxIndex, animated: false });
+          }
+        }}
+      >
+        <StatusBar hidden />
+        <View style={styles.lightboxBg}>
+          <FlatList
+            ref={flatListRef}
+            data={allPhotos}
+            keyExtractor={(_, i) => String(i)}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={lightboxIndex ?? 0}
+            getItemLayout={(_, i) => ({ length: screenWidth, offset: screenWidth * i, index: i })}
+            onViewableItemsChanged={({ viewableItems }) => {
+              if (viewableItems[0]) setLightboxIndex(viewableItems[0].index ?? 0);
+            }}
+            viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                activeOpacity={1}
+                onPress={() => setLightboxIndex(null)}
+                style={{ width: screenWidth, height: "100%", justifyContent: "center" }}
+              >
+                <Image
+                  source={{ uri: item }}
+                  style={{ width: screenWidth, height: screenWidth * (4 / 3) }}
+                  contentFit="contain"
+                  transition={150}
+                />
+              </TouchableOpacity>
+            )}
+          />
+          <TouchableOpacity style={styles.lightboxClose} onPress={() => setLightboxIndex(null)}>
+            <Ionicons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
+          {allPhotos.length > 1 && (
+            <View style={styles.lightboxDots}>
+              {allPhotos.map((_, i) => (
+                <View
+                  key={i}
+                  style={[styles.dot, lightboxIndex === i && styles.dotActive]}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -522,15 +597,46 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Grind image
-  grindImageWrap: {
-    borderRadius: 20,
-    overflow: "hidden",
-    height: 220,
+  // Photos grid
+  photoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
   },
-  grindImage: {
-    width: "100%",
-    height: "100%",
+
+  // Lightbox
+  lightboxBg: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.95)",
+    justifyContent: "center",
+  },
+  lightboxClose: {
+    position: "absolute",
+    top: 52,
+    right: 20,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 20,
+    padding: 8,
+  },
+  lightboxDots: {
+    position: "absolute",
+    bottom: 40,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.35)",
+  },
+  dotActive: {
+    backgroundColor: "#fff",
+    width: 18,
+    borderRadius: 3,
   },
 
   // Actions

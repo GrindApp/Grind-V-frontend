@@ -182,6 +182,8 @@ const GymBuddyScreen = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const swipedIds = useRef<Set<string>>(new Set());
+  const cachedToken = useRef<string | null>(null);
+  const cachedSwiperId = useRef<string | null>(null);
 
   // Ref pointing to the current top card
   const topCardRef = useRef<SwipeCardRef>(null);
@@ -233,6 +235,11 @@ const GymBuddyScreen = () => {
         const token = await AsyncStorage.getItem("authToken");
         if (!token) throw new Error("Token not found");
 
+        // Cache for use in handleSwipe — avoids AsyncStorage read on every swipe
+        cachedToken.current = token;
+        const decoded = decodeJWT(token);
+        cachedSwiperId.current = (decoded?.id || decoded?._id || decoded?.userId || decoded?.sub) ?? null;
+
         setGymBuddies(await loadProfiles(token));
       } catch (error) {
         console.error("Error fetching gym buddies:", error);
@@ -252,20 +259,12 @@ const GymBuddyScreen = () => {
       const swipedUser = gymBuddies[cardIndex];
       if (!swipedUser) return;
 
+      const token = cachedToken.current;
+      const swiperId = cachedSwiperId.current;
+      if (!token || !swiperId) return;
+
       try {
-        const token = await AsyncStorage.getItem("authToken");
-        if (!token) throw new Error("Token not found");
-
-        const decoded = decodeJWT(token);
-        const swiperId = decoded?.id || decoded?._id || decoded?.userId || decoded?.sub;
-
-        if (!swiperId) {
-          console.error("decodeJWT payload:", decoded);
-          Alert.alert("Auth Error", "Could not read user ID from token. Check console for JWT payload.");
-          return;
-        }
-
-        const swipedId = swipedUser.id; // UserProfile._id — what the Swipe model expects
+        const swipedId = swipedUser.id;
         const swipeResponse = await fetch(`${API_URL}/api/v1/swipeUser/swipes`, {
           method: "POST",
           headers: {
@@ -278,9 +277,6 @@ const GymBuddyScreen = () => {
         if (swipeResponse.ok) {
           swipedIds.current.add(swipedId);
           await AsyncStorage.setItem(SWIPED_IDS_KEY, JSON.stringify([...swipedIds.current]));
-        } else {
-          const err = await swipeResponse.json();
-          console.error("Swipe API error:", err);
         }
       } catch (error) {
         console.error("Swipe API Error:", error);
@@ -318,7 +314,7 @@ const GymBuddyScreen = () => {
               setCurrentIndex(0);
               setLoading(true);
               try {
-                const token = await AsyncStorage.getItem("authToken");
+                const token = cachedToken.current;
                 if (!token) throw new Error("Token not found");
                 setGymBuddies(await loadProfiles(token));
               } catch (e) {

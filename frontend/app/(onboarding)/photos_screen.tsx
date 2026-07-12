@@ -45,7 +45,6 @@ const PhotosScreen = () => {
   const hasAtLeastOne = photos.some((p) => p !== null);
   if (hasAtLeastOne) {
 updateOnboardingData({ imageUrl: photos.filter((p) => p !== null).slice(0, 5) as string[] });
-    console.log("Current context data", onboardingData);
     router.push('/location');
   } else {
     Alert.alert('Upload Required', 'Please upload at least one photo.');
