@@ -17,7 +17,10 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "permissions": ["android.permission.ACTIVITY_RECOGNITION"]
+      "permissions": [
+        "android.permission.ACTIVITY_RECOGNITION"
+      ],
+      "package": "com.mohsin3010.frontend"
     },
     "web": {
       "bundler": "metro",
@@ -41,6 +44,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "af54e677-944f-4299-92f4-a649c4f607d3"
+      }
     }
   }
 }
