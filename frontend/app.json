@@ -20,7 +20,8 @@
       "permissions": [
         "android.permission.ACTIVITY_RECOGNITION"
       ],
-      "package": "com.mohsin3010.frontend"
+      "package": "com.mohsin3010.frontend",
+      "usesCleartextTraffic": true
     },
     "web": {
       "bundler": "metro",
